@@ -319,6 +319,7 @@ function attach(state,persist,renderApp,toast){
   const plan=lp(state),day=el.dataset.lifeDay,id=el.dataset.lifeMeal;plan.meals[day]=plan.meals[day]||{};
   if(el.checked)plan.meals[day][id]=true;else delete plan.meals[day][id];
   if(el.checked&&plan.skippedMeals?.[day])delete plan.skippedMeals[day][id];
+  if(!el.checked&&plan.mealReviews?.[day])delete plan.mealReviews[day][id];
   if((id==='lunch'||id==='dinner')&&window.SistemaMonthPlan?.enabled?.(state))window.SistemaMonthPlan.mealChanged(state,day,id);
   state.completions[day]=state.completions[day]||{};plan.autoClaims[day]=plan.autoClaims[day]||{};
   const map={snack1:'life_snack',snack2:'life_snack',lunch:'life_lunch',dinner:'life_dinner'};
