@@ -59,5 +59,5 @@ function notifyPersist(){if(skipPersist||!configured()||!user)return;setMeta({pe
 function lock(){passphrase=null;ready=false;decision=null;clearTimeout(pendingTimer);message('Archivio cloud bloccato. Le quest e il diario rimangono disponibili offline.')}
 async function signout(){clearTimeout(pendingTimer);if(client){try{await client.auth.signOut()}catch{}}user=null;passphrase=null;ready=false;decision=null;revision=null;message('Disconnesso dal cloud. I dati locali restano sul telefono.')}
 window.addEventListener('online',()=>{if(ready&&passphrase&&meta().pending)sync();else refresh()});window.addEventListener('offline',refresh);
-window.cloudSync={panelHTML,attachAll,openPanel,notifyPersist,connect,encrypt,decrypt,lock,config,configured,refresh};
+window.cloudSync={panelHTML,attachAll,openPanel,notifyPersist,connect,encrypt,decrypt,lock,config,configured,refresh,getClient:()=>client,currentUser:()=>user};
 })();
