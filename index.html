@@ -207,9 +207,10 @@ function getFood(state,day){
 }
 function shopKey(str){let h=2166136261;for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),16777619)}return 'item_'+(h>>>0).toString(36)}
 function shoppingList(state,day){
- const meals=getFood(state,day);
- const ids=['snack1','lunch','snack2', 'dinner'];
- return Array.from(new Set(ids.flatMap(k=>meals[k].shop).filter(x=>!x.startsWith('ingredienti solo'))));
+ const meals=getFood(state,day),eaten=state.lifePlan?.meals?.[day]||{};
+ const today=day===todayKey(),afterOfficeLunch=today&&new Date().getHours()>=18;
+ const ids=['snack1','lunch','snack2','dinner'].filter(id=>!eaten[id]&&!(id==='lunch'&&meals.workLunch&&afterOfficeLunch));
+ return Array.from(new Set(ids.flatMap(id=>meals[id].shop||[]).filter(x=>!x.startsWith('ingredienti solo'))));
 }
 function getQuests(state,day){
  if(!enabled(state))return [];
@@ -277,7 +278,7 @@ function renderFood(state,day){
  ${f.pizza?`<div class="life-good">🍕 Serata pizza prevista: goditela, senza dover cucinare.</div>`:''}
  <div class="life-mealgrid life-mainmeals">${primary.map(id=>{const m=MEALS.find(x=>x.id===id),d=f[id],ck=!!done[id];return `<label class="life-meal ${ck?'life-done':''}"><input type="checkbox" data-life-meal="${id}" data-life-day="${esc(day)}" ${ck?'checked':''}/><div class="grow"><div class="life-mealsmall">${id==='lunch'?'PRANZO':'CENA'} · ${esc(d.time)}</div><strong>${esc(d.name)}</strong><p>${esc(d.ingredients)}</p><span>${esc(d.method)}</span><div class="life-queststate">${ck?'✓ Mangiato e registrato':'☐ Spunta dopo aver mangiato'}</div></div></label>`}).join('')}</div>
  <details class="life-details"><summary>🍌 Spuntini facili (facoltativi) · ${Number(!!done.snack1)+Number(!!done.snack2)}/2</summary><div class="life-mealgrid">${['snack1','snack2'].map(id=>{const m=MEALS.find(x=>x.id===id),d=f[id],ck=!!done[id];return `<label class="life-meal ${ck?'life-done':''}"><input type="checkbox" data-life-meal="${id}" data-life-day="${esc(day)}" ${ck?'checked':''}/><div><div class="life-mealsmall">${esc(d.time)}</div><strong>${esc(d.name)}</strong><p>${esc(d.ingredients)}</p></div></label>`}).join('')}</div></details>
- <details class="life-shop" ${shopOpen?'open':''}><summary>🛒 Cosa comprare oggi <span class="pill">${Object.values(shop).filter(Boolean).length}/${list.length}</span></summary><p class="life-muted">${f.workLunch?'Il pranzo pronto al banco è già incluso qui. Gli altri ingredienti servono per cena o spuntini, non per cucinare il pranzo.':'Controlla frigo e dispensa: compra solo ciò che manca.'}</p>${list.map((item,i)=>{const key=shopKey(item),checked=!!shop[key]||(!Object.keys(shop).some(k=>k.startsWith('item_'))&&!!shop['i'+i]);return `<label class="life-buy ${checked?'life-done':''}"><input type="checkbox" data-life-shop="${esc(key)}" data-life-day="${esc(day)}" ${checked?'checked':''}/><span>${esc(item)}</span></label>`}).join('')}<button type="button" class="btn secondary full" data-life-copyshop="${esc(day)}">Copia la lista della spesa</button></details><p class="life-muted">Le porzioni sono solo esempi. Se sospetti una difficoltà con il lattosio, chiedi gli ingredienti al banco e usa alternative tollerate. Non serve mangiare due pasti diversi.</p></section>`;
+ <details class="life-shop" ${shopOpen?'open':''}><summary>🛒 Cosa comprare oggi <span class="pill">${list.filter(item=>!!shop[shopKey(item)]).length}/${list.length}</span></summary><p class="life-muted">I pasti già registrati come mangiati scompaiono dalla lista. Dopo le 18 il pranzo in ufficio non compare più. Compra solo ciò che ti manca per i pasti ancora da fare.</p>${list.length?'':`<div class="life-good">✓ Nessun acquisto rimanente per oggi.</div>`}${list.map((item,i)=>{const key=shopKey(item),checked=!!shop[key]||(!Object.keys(shop).some(k=>k.startsWith('item_'))&&!!shop['i'+i]);return `<label class="life-buy ${checked?'life-done':''}"><input type="checkbox" data-life-shop="${esc(key)}" data-life-day="${esc(day)}" ${checked?'checked':''}/><span>${esc(item)}</span></label>`}).join('')}<button type="button" class="btn secondary full" data-life-copyshop="${esc(day)}">Copia la lista della spesa</button></details><p class="life-muted">Le porzioni sono solo esempi. Se sospetti una difficoltà con il lattosio, chiedi gli ingredienti al banco e usa alternative tollerate. Non serve mangiare due pasti diversi.</p></section>`;
 }
 function renderDungeon(state,g){if(!enabled(state)||!g?.program)return '';
  const day=todayKey();
