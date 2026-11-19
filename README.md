@@ -15,3 +15,6 @@ Il sito statico pubblico contiene soltanto codice e grafiche, non profili né da
 Il cloud Supabase è opzionale e NON attivato. Usa solo un progetto dedicato separato da 4 SEMI, con Auth e RLS. Non mettere mai API secret/service-role keys nel client. L'app cifra i backup cloud localmente con una frase segreta dell'utente prima di inviarli.
 
 Questa app non invia dati a OpenAI e non integra ChatGPT.
+
+
+GitHub Pages: distribuzione tramite GitHub Actions.
