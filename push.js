@@ -170,7 +170,7 @@ async function enable(){
    settings:draft,enabled:true,updated_at:new Date().toISOString()
   },{onConflict:'endpoint'});
   if(error)throw error;
-  registered=true;dirty=false;lastCheck=Date.now();
+  registered=true;dirty=false;setInputs();lastCheck=Date.now();
   show('✓ Notifiche Android attivate! Nuove missioni, sonno, spesa e resoconto sono programmati.');
  }catch(e){registered=false;show('Attivazione: '+String(e?.message||e),!!e?.loginRequired);}
  finally{busy=false;buttons();}
@@ -187,7 +187,7 @@ async function save(){
   }).eq('endpoint',sub.endpoint).eq('user_id',a.user.id).select('id');
   if(error)throw error;
   if(!data?.length)throw Error('Sottoscrizione non trovata. Riattiva le notifiche.');
-  draft=next;dirty=false;show('✓ Preferenze aggiornate e salvate sul server.');
+  draft=next;dirty=false;setInputs();show('✓ Preferenze aggiornate e salvate sul server.');
  }catch(e){show('Salvataggio: '+String(e?.message||e),!!e?.loginRequired);}
  finally{busy=false;buttons();}
 }
