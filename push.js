@@ -224,7 +224,9 @@ async function disable(){
  finally{busy=false;buttons();}
 }
 function attach(state){
+ const firstProfile=!profile;
  profile=state;
+ if(firstProfile&&!registered&&!dirty){draft=baseSettings(state);setInputs();}
  if(!draft)draft=baseSettings(state);
  document.querySelectorAll('[data-push-enable]').forEach(x=>{if(x.dataset.bound)return;x.dataset.bound='1';x.addEventListener('click',enable);});
  document.querySelectorAll('[data-push-save]').forEach(x=>{if(x.dataset.bound)return;x.dataset.bound='1';x.addEventListener('click',save);});
