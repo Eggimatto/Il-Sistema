@@ -1,0 +1,20 @@
+{
+  "id": "./index.html",
+  "name": "Il Sistema — Risveglio V3",
+  "short_name": "Il Sistema",
+  "description": "RPG personale per Android: sonno, umore, forma fisica, abitudini, quest e dungeon. Funziona offline con cloud privato facoltativo.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#070b16",
+  "theme_color": "#080d1b",
+  "lang": "it",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
