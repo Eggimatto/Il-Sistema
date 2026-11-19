@@ -40,7 +40,8 @@ function saveConfiguration(url,key){try{const c=validateCfg(url,key);localStorag
 function clearConfiguration(){confirmAction('Disconnettere questo progetto? Non vengono cancellati i dati presenti nel cloud, ma l’app smette di sincronizzarli.',()=>{if(client)client.auth.signOut().catch(()=>{});localStorage.removeItem(CONFIG_KEY);client=null;user=null;passphrase=null;revision=null;ready=false;decision=null;refresh()})}
 function loadSDK(){if(window.supabase?.createClient)return Promise.resolve(window.supabase);if(sdkPromise)return sdkPromise;sdkPromise=new Promise((resolve,reject)=>{const t=document.createElement('script');t.src=SDK;t.async=true;t.onload=()=>window.supabase?.createClient?resolve(window.supabase):reject(Error('Libreria cloud non disponibile'));t.onerror=()=>reject(Error('Connessione alla libreria cloud non disponibile'));document.head.appendChild(t)}).catch(e=>{sdkPromise=null;throw e});return sdkPromise}
 async function connect(){if(!configured())return;loading(true);try{const sdk=await loadSDK();if(!client){const c=config();client=sdk.createClient(c.url,c.publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,flowType:'pkce'}});client.auth.onAuthStateChange((_ev,session)=>{if(session?.user?.id!==user?.id){user=session?.user||null;passphrase=null;revision=null;decision=null;ready=false;refresh()}})}const result=await client.auth.getUser();if(result.error&&/invalid jwt/i.test(result.error.message))await client.auth.signOut();user=result.data?.user||null;feedback=user?'Accesso riconosciuto: sblocca il tuo archivio.':'Usa la tua email per accedere.'}catch(e){feedback='Cloud non raggiungibile: '+e.message}finally{loading(false)}}
-async function sendLogin(email){if(!navigator.onLine){message('Per l’accesso serve internet.');return}if(!['https:','http:'].includes(location.protocol)){message('Prima pubblica la PWA su HTTPS: il link email non può tornare a un file locale.');return}loading(true);try{if(!client)await connect();if(!client)throw Error('Archivio non disponibile');const redirect=new URL('./',location.href).href; // Canonical Pages URL even when installed PWA starts at index.htmlconst {error}=await client.auth.signInWithOtp({email:email.trim(),options:{emailRedirectTo:redirect,shouldCreateUser:true}});if(error)throw error;feedback='Link inviato. Apri la mail e premi il link sullo stesso browser.'}catch(e){feedback='Accesso: '+e.message}finally{loading(false)}}
+async function sendLogin(email){if(!navigator.onLine){message('Per l’accesso serve internet.');return}if(!['https:','http:'].includes(location.protocol)){message('Prima pubblica la PWA su HTTPS: il link email non può tornare a un file locale.');return}loading(true);try{if(!client)await connect();if(!client)throw Error('Archivio non disponibile');const redirect=new URL('./',location.href).href;
+const {error}=await client.auth.signInWithOtp({email:email.trim(),options:{emailRedirectTo:redirect,shouldCreateUser:true}});if(error)throw error;feedback='Link inviato. Apri la mail e premi il link sullo stesso browser.'}catch(e){feedback='Accesso: '+e.message}finally{loading(false)}}
 async function fetchSnapshot(){if(!client||!user)throw Error('Devi accedere al tuo account');const {data,error}=await client.from('sistema_private_snapshots').select('document,revision,updated_at').eq('user_id',user.id).maybeSingle();if(error)throw error;return data}
 function b64(bytes){let s='';for(let i=0;i<bytes.length;i+=16384)s+=String.fromCharCode(...bytes.subarray(i,i+16384));return btoa(s)}
 function unb64(s){const binary=atob(s);const out=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)out[i]=binary.charCodeAt(i);return out}
@@ -59,5 +60,18 @@ function notifyPersist(){if(skipPersist||!configured()||!user)return;setMeta({pe
 function lock(){passphrase=null;ready=false;decision=null;clearTimeout(pendingTimer);message('Archivio cloud bloccato. Le quest e il diario rimangono disponibili offline.')}
 async function signout(){clearTimeout(pendingTimer);if(client){try{await client.auth.signOut()}catch{}}user=null;passphrase=null;ready=false;decision=null;revision=null;message('Disconnesso dal cloud. I dati locali restano sul telefono.')}
 window.addEventListener('online',()=>{if(ready&&passphrase&&meta().pending)sync();else refresh()});window.addEventListener('offline',refresh);
-window.cloudSync={panelHTML,attachAll,openPanel,notifyPersist,connect,encrypt,decrypt,lock,config,configured,refresh,getClient:()=>client,currentUser:()=>user};
+
+async function ensureAuthClient(){
+  if(!configured())return {client:null,user:null,session:null};
+  // The installed PWA can restore its saved session after the first render.
+  // Never rely on the cached "user" variable for push registration.
+  if(!client)await connect();
+  if(!client)throw Error('Connessione cloud non disponibile.');
+  const {data,error}=await client.auth.getSession();
+  if(error)throw error;
+  const session=data?.session||null;
+  if(session?.user&&user?.id!==session.user.id){user=session.user;refresh();}
+  return {client,user:session?.user||null,session};
+}
+window.cloudSync={panelHTML,attachAll,openPanel,notifyPersist,connect,encrypt,decrypt,lock,config,configured,refresh,ensureAuthClient,getClient:()=>client,currentUser:()=>user};
 })();
