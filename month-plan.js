@@ -98,7 +98,8 @@ const getDish=(state,id)=>BY_ID[id]||data(state).customMeals[id]||PIZZA;
 function pool(state,date,kind){
  const day=dow(date);
  if(kind==='dinner'&&day===5)return [PIZZA];
- const source=kind==='lunch'?(day>=1&&day<=5?DELI:SHARED):[...DINNERS,...VARIANTS];
+ const dayNumber=Math.floor(new Date(date+'T12:00:00').getTime()/86400000);
+ const source=kind==='lunch'?(day>=1&&day<=5?DELI:SHARED):(dayNumber%3===0?VARIANTS:DINNERS);
  const desired=kind==='lunch'?(day>=1&&day<=5?'deli':'shared'):'dinner';
  return [...source,...Object.values(data(state).customMeals).filter(x=>x.category===desired)];
 }
