@@ -1,5 +1,5 @@
 // Offline-first shell. Does not cache Supabase or personal data.
-const CACHE='il-sistema-risveglio-v5-1-snack-quests-20261120';
+const CACHE='il-sistema-risveglio-v5-2-private-meal-corrections-20261120';
 const OWN=['./','./index.html','./manifest.json','./manifest.webmanifest','./icon.svg','./cloud-config.js','./cloud.js','./food-plan.js','./push.js','./month-plan.js'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(OWN)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('il-sistema-risveglio-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
