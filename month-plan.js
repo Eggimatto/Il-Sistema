@@ -274,12 +274,100 @@ function renderHome(state,level){
  '<div class="mp-homelinks"><button type="button" class="btn secondary" data-mp-open-month>📅 Menu del mese</button><button type="button" class="btn secondary" data-view="goals">⚔ Dungeon</button></div>'+
  '<div class="mp-hint">✧ I piatti vengono scelti considerando le tue valutazioni: '+s.rated+' recensioni registrate.</div></div>';
 }
+
+/* Private, one-day corrections are imported from a file chosen on the device.
+   This public source never contains the user's actual meals or health data. */
+const CORRECTION_KIND='il-sistema-meal-correction-v1';
+function applyMealCorrection(state,json){
+ if(!enabled(state))throw Error('Attiva prima il tuo piano personale.');
+ if(!json||json.kind!==CORRECTION_KIND||json.schema!==1)throw Error('Formato della correzione non riconosciuto.');
+ const date=String(json.date||'');
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||isNaN(Date.parse(date+'T12:00:00')))throw Error('Data non valida.');
+ if(!Array.isArray(json.meals)||json.meals.length<1||json.meals.length>2)throw Error('File dei pasti non valido.');
+ const changed=new Set(),p=data(state),m=ensure(state);
+ const seen=new Set();
+ for(const entry of json.meals){
+  if(!entry||!['lunch','dinner'].includes(entry.meal)||seen.has(entry.meal))throw Error('Pasto mancante o duplicato.');
+  if(!['eaten','planned'].includes(entry.status))throw Error('Stato del pasto non valido.');
+  seen.add(entry.meal);
+  const name=String(entry.name||'').trim(),ingredients=String(entry.ingredients||'').trim(),how=String(entry.how||'').trim();
+  if(!name||name.length>120||ingredients.length>360||how.length>400)throw Error('Controlla nome e dettagli del piatto.');
+  const id='actual_'+date.replace(/-/g,'')+'_'+entry.meal;
+  const rated=p.mealReviews?.[date]?.[entry.meal];
+  if(rated&&rated.id!==id)delete p.mealReviews[date][entry.meal];
+  p.customMeals[id]={id,name,ingredients,how:how||'Pasto registrato nel diario.',shop:[],tags:['pasto-reale'],category:'diary',minutes:0};
+  m.entries[date]=m.entries[date]||{};
+  m.entries[date][entry.meal]=id;
+  m.locked[date]=m.locked[date]||{};
+  m.locked[date][entry.meal]=true;
+  m.legacySnapshots=m.legacySnapshots||{};
+  m.legacySnapshots[date]=m.legacySnapshots[date]||{};
+  m.legacySnapshots[date][entry.meal]=true;
+  p.meals[date]=p.meals[date]||{};
+  p.skippedMeals[date]=p.skippedMeals[date]||{};
+  state.completions[date]=state.completions[date]||{};
+  p.autoClaims=p.autoClaims||{};
+  p.autoClaims[date]=p.autoClaims[date]||{};
+  const quest=entry.meal==='lunch'?'life_lunch':'life_dinner';
+  if(entry.status==='eaten'){
+   p.meals[date][entry.meal]=true;
+   delete p.skippedMeals[date][entry.meal];
+   if(!state.completions[date][quest]){
+    state.completions[date][quest]=new Date().toISOString();
+    p.autoClaims[date][quest]=true;
+   }
+  }else{
+   delete p.meals[date][entry.meal];
+   delete p.skippedMeals[date][entry.meal];
+   // This meal is scheduled, not yet consumed; do not award its quest.
+   delete state.completions[date][quest];
+   delete p.autoClaims[date][quest];
+  }
+  changed.add(entry.meal);
+ }
+ p.appliedMealCorrections=p.appliedMealCorrections||{};
+ p.appliedMealCorrections[date]=new Date().toISOString();
+ // Recalculate the food milestones, without touching sleep, mood, training or prior-day progress.
+ const todayMeals=p.meals[date]||{};
+ const enough=Object.values(todayMeals).filter(Boolean).length>=2;
+ if(!enough&&p.autoClaims[date]?.sistema_pasti_v1){
+  delete state.completions[date].sistema_pasti_v1;
+  delete p.autoClaims[date].sistema_pasti_v1;
+ }
+ if(enough&&!state.completions[date].sistema_pasti_v1&&state.customQuests?.some(x=>x.id==='sistema_pasti_v1'&&!x.archived)){
+  state.completions[date].sistema_pasti_v1=new Date().toISOString();
+  p.autoClaims[date].sistema_pasti_v1=true;
+ }
+ // Future recipes remain adaptive; locked and consumed meals are never replaced.
+ if(m.anchor)build(state,m.anchor,true);
+ return {date,meals:[...changed]};
+}
+function renderCorrectionImport(){
+ return '<details class="panel mp-section" id="mp-import-correction">'+
+  '<summary><span>✏️ Correggi un pasto registrato</span><small>Importa un file privato senza cancellare i progressi ⌄</small></summary>'+
+  '<div class="mp-sectionbody"><p class="mp-muted">Usa il file JSON preparato per correggere soltanto i pasti indicati. Diario, peso, XP delle altre quest e cloud restano invariati.</p>'+
+  '<input type="file" id="mpCorrectionFile" accept=".json,application/json" hidden>'+
+  '<button class="btn secondary full" type="button" data-mp-import-correction>Importa correzione pasti</button></div></details>';
+}
+
 function applyFeedback(state,date,kind){const m=ensure(state);build(state,m.anchor,true);unsaved=true;}
 function markSkip(state,date,kind){const p=data(state),m=ensure(state);p.skippedMeals[date]=p.skippedMeals[date]||{};if(p.skippedMeals[date][kind])delete p.skippedMeals[date][kind];else p.skippedMeals[date][kind]=chosen(state,date,kind);if(!Object.keys(p.skippedMeals[date]).length)delete p.skippedMeals[date];applyFeedback(state,date,kind)}
 function rate(state,date,kind,stars){if(!eaten(state,date,kind))return false;const p=data(state);p.mealReviews[date]=p.mealReviews[date]||{};p.mealReviews[date][kind]={id:chosen(state,date,kind),stars,updatedAt:new Date().toISOString()};applyFeedback(state,date,kind);return true;}
 function propose(state,date,kind){if(eaten(state,date,kind))return null;const m=ensure(state),obs=observed(state),old=chosen(state,date,kind);const alternatives=pool(state,date,kind).filter(x=>x.id!==old);const untried=alternatives.filter(x=>!obs.stats[x.id]?.count&&!obs.stats[x.id]?.skipped);const poolUse=untried.length?untried:alternatives;const seen=Object.values(m.entries||{}).flatMap(x=>[x.lunch,x.dinner]);const choices=poolUse.map(d=>({dish:d,score:(hash(d.id+date+Math.random())%1000)/1000-(seen.includes(d.id)?2:0)+((obs.tagStats[d.tags?.[0]]?.sum||0)*0.05)})).sort((a,b)=>b.score-a.score);const pick=choices[0]?.dish;if(!pick)return null;m.entries[date][kind]=pick.id;m.locked[date]=m.locked[date]||{};m.locked[date][kind]=true;applyFeedback(state,date,kind);return pick;}
 function attach(state,persist,renderApp,toast){if(!enabled(state))return;ensure(state);if(unsaved){unsaved=false;persist();}
  const doc=document;
+ doc.querySelector('[data-mp-import-correction]')?.addEventListener('click',()=>doc.getElementById('mpCorrectionFile')?.click());
+ doc.getElementById('mpCorrectionFile')?.addEventListener('change',async e=>{
+  const file=e.currentTarget.files?.[0];if(!file)return;
+  try{
+   if(file.size>12000)throw Error('File troppo grande.');
+   const json=JSON.parse(await file.text());
+   if(!confirm('Applicare i pasti del '+String(json.date||'giorno indicato')+'? Il resto dei tuoi dati rimarrà invariato.'))return;
+   const result=applyMealCorrection(state,json);
+   persist();renderApp();toast('Correzione applicata: '+result.meals.join(' e ')+'.');
+  }catch(err){toast('Importazione non riuscita: '+String(err?.message||err))}
+  finally{e.currentTarget.value=''}
+ });
  doc.querySelectorAll('[data-mp-quest]').forEach(el=>el.addEventListener('toggle',()=>{if(el.open)openQuest=el.dataset.mpQuest;else if(openQuest===el.dataset.mpQuest)openQuest=null;}));
  doc.querySelector('[data-mp-calendar]')?.addEventListener('toggle',e=>{menuOpen=e.currentTarget.open});
  doc.querySelector('[data-mp-shopping]')?.addEventListener('toggle',e=>{shopOpen=e.currentTarget.open});
@@ -293,5 +381,5 @@ function attach(state,persist,renderApp,toast){if(!enabled(state))return;ensure(
 const css=`
 .mp-app{display:grid;gap:10px;max-width:940px;margin:0 auto}.mp-questtop,.mp-homehero{background:linear-gradient(145deg,#152240,#0e172a);border:1px solid rgba(131,171,234,.25);border-radius:17px;padding:16px;display:flex;align-items:center;justify-content:space-between;gap:12px}.mp-eyebrow{font-size:10px;color:#73d1f2;font-weight:900;letter-spacing:.10em}.mp-questtop h2,.mp-homehero h2{font-size:20px;line-height:1.16;margin:4px 0}.mp-questtop p,.mp-homehero p{font-size:12px;color:#aebdd2;margin:4px 0 0}.mp-count{font-size:29px;font-weight:900;white-space:nowrap;line-height:1}.mp-count span{font-size:14px;color:#9aa9c4}.mp-quest{background:#131f35;border:1px solid rgba(143,169,219,.23);border-radius:15px;overflow:hidden}.mp-quest[open]{border-color:rgba(105,184,240,.58)}.mp-quest summary{list-style:none;display:flex;align-items:center;gap:11px;padding:14px 12px;min-height:72px;cursor:pointer}.mp-quest summary::-webkit-details-marker,.mp-section summary::-webkit-details-marker{display:none}.mp-icon{display:grid;place-items:center;flex:none;width:36px;height:36px;background:#1c3553;border-radius:11px;font-size:22px;color:#b6dfff}.mp-headtext{display:grid;gap:3px;min-width:0;flex:1}.mp-headtext strong{font-size:14px;line-height:1.25;color:#f0f6ff}.mp-headtext small{font-size:11px;line-height:1.35;color:#aebed6}.mp-status{font-size:10px;white-space:nowrap;padding:5px 8px;border-radius:99px;background:#27354c;color:#bfcfe1}.mp-status.ok{background:#173a34;color:#8ce2c6}.mp-chevron{color:#93abc5;font-size:22px}.mp-quest[open] .mp-chevron{transform:rotate(180deg)}.mp-detail{border-top:1px solid rgba(150,173,219,.18);padding:14px;background:#101b2e;display:grid;gap:12px}.mp-form{margin:0}.mp-fields,.mp-fields label{display:grid;gap:8px}.mp-fields label{color:#b3c8e3;font-size:12px;font-weight:650}.mp-fields input,.mp-fields select{min-width:0;width:100%;padding:11px;background:#182842;border:1px solid rgba(170,192,239,.28);border-radius:9px;color:#edf4ff;font-size:14px}.mp-votes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.mp-votes select{padding:10px 4px}.mp-meal-detail{display:grid;gap:9px}.mp-mealname{font-size:16px;font-weight:850}.mp-tags{display:flex;gap:6px;flex-wrap:wrap}.mp-tags span{font-size:11px;background:#1c3548;padding:4px 8px;border-radius:99px;color:#97d9ea}.mp-meal-detail p{margin:0;color:#c6d4e6;font-size:13px}.mp-subtitle{font-size:11px;color:#8ebbd9;text-transform:uppercase;letter-spacing:.07em;font-weight:850}.mp-actions{display:flex;gap:10px;flex-wrap:wrap}.mp-actions .btn{font-size:12px;min-height:42px}.mp-mealcheck{display:flex;align-items:center;gap:8px;background:#25456a;border-radius:11px;padding:9px 12px;color:#fff;font-weight:800;font-size:12px;flex:1}.mp-mealcheck input,.mp-shopitem input{width:20px;height:20px;accent-color:#73d4db;flex:none}.mp-change{border:0;background:transparent;color:#7dd6f4;text-align:left;padding:6px 0;cursor:pointer;font-weight:800}.mp-rating{display:grid;gap:5px;margin-top:4px;background:#1a2b42;padding:10px;border-radius:11px}.mp-rating span{font-size:12px;font-weight:850}.mp-stars{display:flex;gap:3px}.mp-star{min-width:42px;min-height:43px;border:1px solid #345071;border-radius:9px;color:#adbdd0;background:#152440;font-size:26px;line-height:1}.mp-star.picked{color:#f8cd75;border-color:#987743}.mp-rating small,.mp-muted{color:#adc0d8;font-size:12px}.mp-section{background:#101b2d;border:1px solid rgba(147,173,223,.18);border-radius:13px;overflow:hidden}.mp-section summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:7px;padding:14px;font-size:13px;font-weight:850}.mp-section summary small{color:#9db2cc;font-size:11px;font-weight:500}.mp-sectionbody{border-top:1px solid rgba(151,180,228,.14);padding:14px;display:grid;gap:10px}.mp-shopitem{display:flex;align-items:center;gap:10px;font-size:12px;color:#e2ebfb;line-height:1.35;padding:9px;background:#1a2a42;border-radius:8px}.mp-empty{font-size:13px;color:#94ddc1}.mp-mini-stats{display:flex;flex-wrap:wrap;gap:7px}.mp-mini-stats span{font-size:11px;padding:6px 8px;border:1px solid rgba(150,176,219,.22);border-radius:99px}.mp-week{display:grid;gap:0}.mp-week h4{margin:10px 0 2px;font-size:12px;color:#7de2ef}.mp-day{display:grid;grid-template-columns:64px minmax(0,1fr);gap:9px;padding:9px 0;border-bottom:1px solid rgba(120,157,211,.1)}.mp-date{font-size:12px;font-weight:800;color:#def2ff}.mp-date b{display:block;font-size:9px;color:#8af1e1}.mp-lines{display:grid;gap:3px;min-width:0}.mp-lines span{font-size:12px;color:#b8c9e0;line-height:1.35}.mp-lines i{font-style:normal;color:#87e2cb;min-width:12px;display:inline-block}.mp-custom{margin-top:10px;border:1px solid rgba(144,183,244,.2);border-radius:10px;padding:10px}.mp-custom summary{padding:6px!important;display:block!important;color:#91d9f2}.mp-custom form{padding:10px 0}.mp-extrablock{padding:10px 0}.mp-extrablock p{margin:6px 0}.mp-homehero{display:grid;gap:13px}.mp-homehead{display:flex;justify-content:space-between;align-items:center;gap:12px}.mp-homehead h2{max-width:245px;font-size:23px}.mp-progress{height:8px;background:#263852;border-radius:99px;overflow:hidden}.mp-progress i{display:block;height:100%;background:linear-gradient(90deg,#5acbf2,#77ddc2)}.mp-progresslabels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.mp-progresslabels span{text-align:center;font-size:10px;color:#91a5bf}.mp-progresslabels span.complete{color:#8be0be}.mp-next,.mp-homemeals{border-radius:15px;background:#13213a;border:1px solid rgba(135,173,235,.2);padding:15px;display:grid;gap:9px}.mp-next strong{font-size:17px;color:#f1f6ff}.mp-homemeals strong{font-size:15px}.mp-homemeals p{font-size:12px;color:#a7bad5;margin:4px 0}.mp-homemeals .btn{width:max-content}.mp-homelinks{display:grid;grid-template-columns:1fr 1fr;gap:9px}.mp-homelinks .btn{min-height:45px;white-space:normal;font-size:12px}.mp-hint{font-size:11px;color:#9eafc8;padding:7px}.mp-quest[open] summary{background:#192b46}@media(max-width:350px){.mp-quest summary{padding:11px 9px;gap:7px}.mp-headtext strong{font-size:13px}.mp-status{padding:5px 6px;font-size:9px}.mp-count{font-size:24px}.mp-votes{grid-template-columns:1fr}.mp-day{grid-template-columns:54px minmax(0,1fr)}}`;
 if(typeof document!=='undefined'&&!document.getElementById('month-plan-style')){const style=document.createElement('style');style.id='month-plan-style';style.textContent=css;document.head.appendChild(style)}
-window.SistemaMonthPlan={enabled,ensure,withMeals,renderQuests,renderHome,attach,stats,observed,planDates,chosen,rate,markSkip,propose,mealChanged:applyFeedback};
+window.SistemaMonthPlan={enabled,ensure,withMeals,renderQuests,renderHome,attach,stats,observed,planDates,chosen,rate,markSkip,propose,mealChanged:applyFeedback,applyMealCorrection,renderCorrectionImport};
 })();
