@@ -90,7 +90,7 @@ const enabled=state=>!!state?.profile&&!!state?.lifePlan?.settings?.activated;
 const data=state=>{
  if(!state.lifePlan||typeof state.lifePlan!=='object')state.lifePlan={};
  const p=state.lifePlan;
- for(const key of ['meals','mealReviews','skippedMeals','customMeals','shopping'])if(!p[key]||typeof p[key]!=='object'||Array.isArray(p[key]))p[key]={};
+ for(const key of ['meals','mealReviews','skippedMeals','customMeals','shopping','snackOverrides'])if(!p[key]||typeof p[key]!=='object'||Array.isArray(p[key]))p[key]={};
  return p;
 };
 const allDishes=state=>[...LIBRARY,...Object.values(data(state).customMeals||{}).filter(x=>x&&x.id&&x.name&&Array.isArray(x.shop))];
@@ -180,7 +180,7 @@ function withMeals(state,day,base){
   m.legacySnapshots=m.legacySnapshots||{};m.legacySnapshots[day]=m.legacySnapshots[day]||{};m.legacySnapshots[day][kind]=true;unsaved=true;
  }
  const l=getDish(state,chosen(state,day,'lunch')),d=getDish(state,chosen(state,day,'dinner'));
- return {...base,lunch:{...l,time:base.lunch.time},dinner:{...d,time:base.dinner.time},selection:l.id};
+ return {...base,...Object.fromEntries(['snack1','snack2'].filter(k=>p.snackOverrides?.[day]?.[k]).map(k=>[k,{...base[k],...p.snackOverrides[day][k],time:base[k].time}])),lunch:{...l,time:base.lunch.time},dinner:{...d,time:base.dinner.time},selection:l.id};
 }
 function eaten(state,date,kind){return !!data(state).meals?.[date]?.[kind]}
 function skipped(state,date,kind){return !!data(state).skippedMeals?.[date]?.[kind]}
@@ -283,32 +283,38 @@ function applyMealCorrection(state,json){
  if(!json||json.kind!==CORRECTION_KIND||json.schema!==1)throw Error('Formato della correzione non riconosciuto.');
  const date=String(json.date||'');
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||isNaN(Date.parse(date+'T12:00:00')))throw Error('Data non valida.');
- if(!Array.isArray(json.meals)||json.meals.length<1||json.meals.length>2)throw Error('File dei pasti non valido.');
+ if(!Array.isArray(json.meals)||json.meals.length<1||json.meals.length>4)throw Error('File dei pasti non valido.');
  const changed=new Set(),p=data(state),m=ensure(state);
  const seen=new Set();
  for(const entry of json.meals){
-  if(!entry||!['lunch','dinner'].includes(entry.meal)||seen.has(entry.meal))throw Error('Pasto mancante o duplicato.');
+  if(!entry||!['snack1','snack2','lunch','dinner'].includes(entry.meal)||seen.has(entry.meal))throw Error('Pasto mancante o duplicato.');
   if(!['eaten','planned'].includes(entry.status))throw Error('Stato del pasto non valido.');
   seen.add(entry.meal);
   const name=String(entry.name||'').trim(),ingredients=String(entry.ingredients||'').trim(),how=String(entry.how||'').trim();
   if(!name||name.length>120||ingredients.length>360||how.length>400)throw Error('Controlla nome e dettagli del piatto.');
-  const id='actual_'+date.replace(/-/g,'')+'_'+entry.meal;
-  const rated=p.mealReviews?.[date]?.[entry.meal];
-  if(rated&&rated.id!==id)delete p.mealReviews[date][entry.meal];
-  p.customMeals[id]={id,name,ingredients,how:how||'Pasto registrato nel diario.',shop:[],tags:['pasto-reale'],category:'diary',minutes:0};
-  m.entries[date]=m.entries[date]||{};
-  m.entries[date][entry.meal]=id;
-  m.locked[date]=m.locked[date]||{};
-  m.locked[date][entry.meal]=true;
-  m.legacySnapshots=m.legacySnapshots||{};
-  m.legacySnapshots[date]=m.legacySnapshots[date]||{};
-  m.legacySnapshots[date][entry.meal]=true;
+  if(entry.meal==='snack1'||entry.meal==='snack2'){
+   // Keep snack details entirely in private saved state, not the public source.
+   p.snackOverrides[date]=p.snackOverrides[date]||{};
+   p.snackOverrides[date][entry.meal]={name,ingredients,method:how||'Spuntino già consumato.',shop:[]};
+  }else{
+   const id='actual_'+date.replace(/-/g,'')+'_'+entry.meal;
+   const rated=p.mealReviews?.[date]?.[entry.meal];
+   if(rated&&rated.id!==id)delete p.mealReviews[date][entry.meal];
+   p.customMeals[id]={id,name,ingredients,how:how||'Pasto registrato nel diario.',shop:[],tags:['pasto-reale'],category:'diary',minutes:0};
+   m.entries[date]=m.entries[date]||{};
+   m.entries[date][entry.meal]=id;
+   m.locked[date]=m.locked[date]||{};
+   m.locked[date][entry.meal]=true;
+   m.legacySnapshots=m.legacySnapshots||{};
+   m.legacySnapshots[date]=m.legacySnapshots[date]||{};
+   m.legacySnapshots[date][entry.meal]=true;
+  }
   p.meals[date]=p.meals[date]||{};
   p.skippedMeals[date]=p.skippedMeals[date]||{};
   state.completions[date]=state.completions[date]||{};
   p.autoClaims=p.autoClaims||{};
   p.autoClaims[date]=p.autoClaims[date]||{};
-  const quest=entry.meal==='lunch'?'life_lunch':'life_dinner';
+  const quest=({snack1:'life_snack',snack2:'life_snack_2',lunch:'life_lunch',dinner:'life_dinner'})[entry.meal];
   if(entry.status==='eaten'){
    p.meals[date][entry.meal]=true;
    delete p.skippedMeals[date][entry.meal];
