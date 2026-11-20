@@ -89,7 +89,8 @@ const todayKey=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.get
 const DAY_NAMES=['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
 const QT=[
  {id:'life_morning_sleep',area:'sonno',title:'Registra il sonno al risveglio',desc:'Quando ti svegli, inserisci ore dormite. Non servono risultati perfetti.',xp:15,ico:'☾'},
- {id:'life_snack',area:'nutrizione',title:'Aggiungi uno spuntino reale',desc:'Prepara e consuma uno spuntino semplice che ti piace; punta prima ad aggiungerne uno, non a cambiare tutto.',xp:15,ico:'◉'},
+ {id:'life_snack',area:'nutrizione',title:'Spuntino del mattino',desc:'Mangia lo spuntino previsto nella tua giornata.',xp:15,ico:'◉'},
+ {id:'life_snack_2',area:'nutrizione',title:'Spuntino del pomeriggio',desc:'Mangia e registra il secondo spuntino.',xp:15,ico:'◉'},
  {id:'life_lunch',area:'nutrizione',title:'Pranzo concreto',desc:'Prepara un pranzo completo, anche usando il cuociriso o ingredienti già pronti.',xp:15,ico:'◉'},
  {id:'life_dinner',area:'nutrizione',title:'Cena reale',desc:'Completa la cena prevista o una sostituzione equivalente; una cena sociale conta.',xp:15,ico:'◉'},
  {id:'life_shopping',area:'nutrizione',title:'Spesa essenziale del giorno',desc:'Controlla le scorte e compra solo gli ingredienti mancanti per oggi o domani.',xp:10,ico:'◈'}
@@ -221,7 +222,8 @@ function getQuests(state,day){
   const f=getFood(state,day),cfg=state.lifePlan.settings;
   const labels={
    life_morning_sleep:`Al risveglio · inserisci le ore dormite direttamente nelle quest`,
-   life_snack:`${cfg.food.snackOne} · banana e mandorle o uno spuntino pratico`,
+   life_snack:`${cfg.food.snackOne} · ${f.snack1.name}`,
+   life_snack_2:`${cfg.food.snackTwo} · ${f.snack2.name}`,
    life_lunch:`${cfg.food.lunch} · ${f.lunch.name}${f.workLunch?' (acquista al banco)':''}`,
    life_dinner:`${cfg.food.dinner} · ${f.dinner.name}`,
    life_shopping:f.workLunch?'Compra il pranzo già pronto al banco e soltanto ciò che manca per cena e spuntini':'Compra solo ciò che manca per oggi o domani'
@@ -322,8 +324,8 @@ function attach(state,persist,renderApp,toast){
   if(!el.checked&&plan.mealReviews?.[day])delete plan.mealReviews[day][id];
   if((id==='lunch'||id==='dinner')&&window.SistemaMonthPlan?.enabled?.(state))window.SistemaMonthPlan.mealChanged(state,day,id);
   state.completions[day]=state.completions[day]||{};plan.autoClaims[day]=plan.autoClaims[day]||{};
-  const map={snack1:'life_snack',snack2:'life_snack',lunch:'life_lunch',dinner:'life_dinner'};
-  const cid=map[id],should=id.startsWith('snack')?(plan.meals[day].snack1||plan.meals[day].snack2):plan.meals[day][id];
+  const map={snack1:'life_snack',snack2:'life_snack_2',lunch:'life_lunch',dinner:'life_dinner'};
+  const cid=map[id],should=!!plan.meals[day][id];
   if(should&&!state.completions[day][cid]){state.completions[day][cid]=new Date().toISOString();plan.autoClaims[day][cid]=true}
   else if(!should&&plan.autoClaims[day][cid]){delete state.completions[day][cid];delete plan.autoClaims[day][cid]}
   const two=Object.values(plan.meals[day]).filter(Boolean).length>=2;
@@ -544,11 +546,11 @@ function renderSimpleQuests(){
   const cleared=weeklyClaimCount(week),required=Math.min(3,plan.quests.length);
   return `<div class="stack simple-quests">${tabs}<section class="panel light"><div class="eyebrow">LE PROVE DELLA SETTIMANA</div><h2>${weekLabel(week)}</h2><p class="muted small">Registra le quest normali: i risultati si aggiornano da soli. Riscatta gli XP quando raggiungi un obiettivo.</p></section><div class="simple-week-grid">${plan.quests.map(q=>{const value=weeklyProgress(q,week),goal=q.target||1,done=!!getWeeklyClaim(week,q.id),ready=value>=goal,pct=Math.min(100,Math.round(value/goal*100));return `<section class="panel simple-week-card"><div class="row between wrap"><h3>${escapeHtml(q.title)}</h3><span class="pill ${done?'complete':''}">${done?'✓ Completata':pretty(value,0)+'/'+pretty(goal,0)}</span></div><p class="muted small">${escapeHtml(q.desc)}</p><div class="progress"><i style="width:${pct}%"></i></div>${done?`<span class="caption">+${q.xp} XP già riscattati</span>`:ready?`<button class="btn full" data-claim-week="${escapeHtml(q.id)}">Riscatta +${q.xp} XP</button>`:`<span class="caption">Progresso automatico · ${Math.round(pct)}%</span>`}</section>`}).join('')}</div><section class="panel simple-boss"><div class="eyebrow">BOSS SETTIMANALE</div><h2>⚔ La prova finale</h2><p>Completa ${required} prove settimanali per ottenere la ricompensa.</p><div class="row between wrap"><strong>${cleared} / ${required} completate</strong>${getWeeklyClaim(week,'boss')?`<span class="pill complete">✓ Boss superato</span>`:weeklyBossReady(week)?`<button class="btn" data-claim-week="boss">Riscatta +100 XP</button>`:`<span class="caption">Ancora da sbloccare</span>`}</div></section><button class="btn secondary full" data-questtab="daily">← Torna alle quest di oggi</button></div>`;
  }
- const mandatory=['life_morning_sleep','life_lunch','life_dinner','checkin'];
+ const mandatory=['life_morning_sleep','life_snack','life_lunch','life_snack_2','life_dinner','checkin'];
  const done=mandatory.filter(id=>doneOn(today,id)).length;
  const handled=new Set([...mandatory,'life_snack','life_shopping','sistema_pasti_v1','sistema_forza_v1','sonno_rituale']);
  const optional=getQuests().filter(q=>!handled.has(q.id));
- return `<div class="stack simple-quests">${tabs}<section class="panel light simple-dayhero"><div><div class="eyebrow">${escapeHtml(formatDate(today,true))}</div><h2>Le 4 cose importanti di oggi</h2><p>1. Sonno · 2. Pranzo · 3. Cena · 4. Resoconto serale</p></div><div class="simple-daycount"><strong>${done}<span>/4</span></strong><small>fatte</small></div><div class="progress"><i style="width:${Math.round(done/4*100)}%"></i></div><div class="caption">Le altre attività sono facoltative. Nessuna penalità se salti una quest.</div></section>
+ return `<div class="stack simple-quests">${tabs}<section class="panel light simple-dayhero"><div><div class="eyebrow">${escapeHtml(formatDate(today,true))}</div><h2>Le 6 cose importanti di oggi</h2><p>Sonno · Spuntino 1 · Pranzo · Spuntino 2 · Cena · Resoconto</p></div><div class="simple-daycount"><strong>${done}<span>/6</span></strong><small>fatte</small></div><div class="progress"><i style="width:${Math.round(done/6*100)}%"></i></div><div class="caption">Le altre attività sono facoltative. Nessuna penalità se salti una quest.</div></section>
  ${window.SistemaLifePlan.renderMorningCheckin(state,today)}
  ${window.SistemaLifePlan.renderFood(state,today)}
  ${window.SistemaLifePlan.renderEveningCheckin(state,today)}
