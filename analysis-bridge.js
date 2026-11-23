@@ -171,8 +171,11 @@ function attach(state,persist,render,toast){
  document.querySelectorAll('[data-ab-proposals]').forEach(b=>b.addEventListener('click',loadProposals));
  document.querySelectorAll('[data-ab-login]').forEach(b=>b.addEventListener('click',()=>window.cloudSync?.openPanel?.()));
  refreshCode();refreshProposals();
- document.querySelectorAll('[data-ab-apply]').forEach(b=>b.addEventListener('click',()=>resolveProposal(state,b.dataset.abApply,true,persist,render,toast)));
- document.querySelectorAll('[data-ab-decline]').forEach(b=>b.addEventListener('click',()=>resolveProposal(state,b.dataset.abDecline,false,persist,render,toast)));
+ document.querySelectorAll('[data-ab-proposal-list]').forEach(container=>container.addEventListener('click',e=>{
+  const approve=e.target.closest('[data-ab-apply]'),decline=e.target.closest('[data-ab-decline]');
+  if(approve)resolveProposal(state,approve.dataset.abApply,true,persist,render,toast);
+  if(decline)resolveProposal(state,decline.dataset.abDecline,false,persist,render,toast);
+ }));
 }
 window.SistemaAnalysisBridge={panelHTML,attach,snapshot,applyPlan};
 })();
