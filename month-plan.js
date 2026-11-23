@@ -427,6 +427,31 @@ function attach(state,persist,renderApp,toast){if(!enabled(state))return;ensure(
   finally{e.currentTarget.value=''}
  });
  doc.querySelectorAll('[data-mp-quest]').forEach(el=>el.addEventListener('toggle',()=>{if(el.open)openQuest=el.dataset.mpQuest;else if(openQuest===el.dataset.mpQuest)openQuest=null;}));
+ doc.querySelectorAll('[data-mp-recovery]').forEach(b=>b.addEventListener('click',()=>{
+  const day=b.dataset.mpRecovery;
+  if(!workoutScheduled(state,day)||state.completions?.[day]?.sistema_forza_v1)return;
+  state.lifePlan=state.lifePlan||{};
+  state.lifePlan.recoveryDays=state.lifePlan.recoveryDays||{};
+  state.lifePlan.recoveryDays[day]=new Date().toISOString();
+  openQuest='workout';
+  persist();renderApp();toast('Giornata di recupero registrata, senza penalità.');
+ }));
+ doc.querySelectorAll('[data-mp-open-workout-editor]').forEach(b=>b.addEventListener('click',()=>{
+  const editor=doc.querySelector('[data-me-workout]');
+  if(!editor)return toast('Editor allenamento non disponibile.');
+  editor.open=true;
+  requestAnimationFrame(()=>editor.scrollIntoView({behavior:'smooth',block:'start'}));
+ }));
+ doc.querySelectorAll('[data-mp-open-workout]').forEach(b=>b.addEventListener('click',()=>{
+  openQuest='workout';
+  const nav=doc.querySelector('.mobilebar [data-view="quests"]')||doc.querySelector('.nav [data-view="quests"]');
+  if(nav)nav.click();
+  requestAnimationFrame(()=>{
+   const daily=doc.querySelector('[data-questtab="daily"]');
+   if(daily&&!daily.classList.contains('active'))daily.click();
+   requestAnimationFrame(()=>doc.querySelector('[data-mp-quest="workout"]')?.scrollIntoView({behavior:'smooth',block:'center'}));
+  });
+ }));
  doc.querySelector('[data-mp-calendar]')?.addEventListener('toggle',e=>{menuOpen=e.currentTarget.open});
  doc.querySelector('[data-mp-shopping]')?.addEventListener('toggle',e=>{shopOpen=e.currentTarget.open});
  doc.querySelector('[data-mp-extra]')?.addEventListener('toggle',e=>{extraOpen=e.currentTarget.open});
