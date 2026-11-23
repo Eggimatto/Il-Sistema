@@ -209,7 +209,7 @@ function todayStatus(state,date,kind){return eaten(state,date,kind)?'Mangiato':s
 let openQuest=null,menuOpen=false,shopOpen=false,extraOpen=false;
 function headCard(id,title,sub,status,content){
  const open=openQuest===id?' open':'';
- return '<details class="mp-quest" data-mp-quest="'+id+'"'+open+'><summary><span class="mp-icon">'+({sleep:'\u263e',snack1:'\u25cf',lunch:'\u25c9',snack2:'\u25cf',dinner:'\u25c9',evening:'\u2727'}[id]||'\u2727')+'</span><span class="mp-headtext"><strong>'+H(title)+'</strong><small>'+H(sub)+'</small></span><span class="mp-status '+(status==='Fatto'?'ok':'')+'">'+H(status)+'</span><span class="mp-chevron">\u2304</span></summary><div class="mp-detail">'+content+'</div></details>';
+ return '<details class="mp-quest" data-mp-quest="'+id+'"'+open+'><summary><span class="mp-icon">'+({sleep:'\u263e',snack1:'\u25cf',lunch:'\u25c9',snack2:'\u25cf',workout:'\u2692',dinner:'\u25c9',evening:'\u2727'}[id]||'\u2727')+'</span><span class="mp-headtext"><strong>'+H(title)+'</strong><small>'+H(sub)+'</small></span><span class="mp-status '+(status==='Fatto'?'ok':'')+'">'+H(status)+'</span><span class="mp-chevron">\u2304</span></summary><div class="mp-detail">'+content+'</div></details>';
 }
 function morningForm(state,day){const v=state.logs?.[day]||{};return '<form id="lifeMorningForm" class="mp-form mp-fields"><label>Ore dormite<input name="sleepHours" type="number" min="0.25" max="24" step="0.25" inputmode="decimal" placeholder="Es. 4,5" value="'+H(v.sleepHours??'')+'" required/></label><label>Ora in cui ti sei coricato (facoltativa)<input type="time" name="bedtime" value="'+H(v.bedtime||'')+'"/></label><button class="btn full" type="submit">Salva il sonno</button></form>'}
 function eveningForm(state,day){const v=state.logs?.[day]||{};const input=(k,name)=>'<label>'+name+'<select name="'+k+'" required><option value="">Voto 1-5</option>'+[1,2,3,4,5].map(n=>'<option value="'+n+'" '+(v[k]===n?'selected':'')+'>'+n+' / 5</option>').join('')+'</select></label>';return '<form id="lifeEveningForm" class="mp-form mp-fields"><div class="mp-votes">'+input('mood','Umore')+input('energy','Energia')+input('stress','Stress')+'</div><button class="btn full" type="submit">Salva la giornata</button></form>'}
@@ -232,62 +232,101 @@ function monthPanel(state){const plan=ensure(state),d=planDates(plan.anchor),s=s
  return '<details class="mp-section mp-month" id="month-calendar" data-mp-calendar '+(menuOpen?'open':'')+'><summary><span>\ud83d\udcc5 Menu dei prossimi 30 giorni</span><small>Apri il calendario \u2304</small></summary><div class="mp-sectionbody"><p class="mp-muted">Il menu viene corretto automaticamente quando registri un pasto o dai le stelle. I piatti saltati esplicitamente contano, quelli non registrati no. Le scelte che cambi a mano restano fissate.</p><div class="mp-mini-stats"><span>'+s.eatenCount+' mangiati</span><span>'+s.skippedCount+' saltati</span><span>'+s.rated+' valutati</span></div>'+(insights(state)?'<p><strong>Piatti graditi:</strong> '+H(insights(state))+'</p>':'<p>Dai le prime stelle per far apprendere al Sistema i tuoi gusti.</p>')+weeks.join('')+customForm()+'</div></details>';
 }
 function customForm(){return '<details class="mp-custom"><summary>+ Aggiungi una tua ricetta alla libreria</summary><form id="mpCustomForm" class="mp-form mp-fields"><label>Per quale pasto?<select name="category"><option value="dinner">Cena</option><option value="deli">Pranzo pronto al supermercato</option><option value="shared">Pranzo del weekend insieme</option></select></label><label>Nome del piatto<input name="name" maxlength="90" placeholder="Es. Pasta con ricotta e zucchine" required/></label><label>Ingredienti<input name="ingredients" maxlength="240" placeholder="Ingredienti e dosi indicative" required/></label><label>Preparazione / acquisto<input name="how" maxlength="280" placeholder="Come lo prepari o lo acquisti" required/></label><label>Cosa comprare<input name="shop" maxlength="160" placeholder="Lista breve della spesa"/></label><button class="btn full" type="submit">Aggiungi al menu dei prossimi giorni</button></form></details>'}
-function optionalPanel(state,day){
+function workoutScheduled(state,day){
+ return !!window.SistemaLifePlan?.trainingDay?.(state,day);
+}
+function workoutCompleted(state,day){
+ return !!state.completions?.[day]?.sistema_forza_v1 || !!state.lifePlan?.recoveryDays?.[day];
+}
+function nextWorkoutDay(state,day){
+ for(let i=1;i<=60;i++){
+  const d=add(day,i);
+  if(workoutScheduled(state,d))return d;
+ }
+ return null;
+}
+function workoutCard(state,day){
  const life=window.SistemaLifePlan;
- const train=life?.trainingDay?.(state,day),fatigue=life?.fatigue?.(state,day);
+ const scheduled=workoutScheduled(state,day),next=scheduled?day:nextWorkoutDay(state,day);
+ const t=next?life?.training?.(state,next):null;
  const done=!!state.completions?.[day]?.sistema_forza_v1;
- const custom=state.lifePlan?.workoutOverrides?.[day];
- const summary=custom?'<div class="mp-extrablock"><strong>'+H(custom.title)+'</strong><p class="mp-muted">Durata: '+H(custom.minutes||20)+' min</p>'+
- '<div class="mp-workout-list">'+(custom.exercises||[]).map(x=>'<div><strong>'+H(x[0])+'</strong><span>'+H(x[1])+'</span><small>'+H(x[2])+'</small></div>').join('')+'</div></div>':'';
- return '<details class="mp-section" data-mp-extra '+(extraOpen?'open':'')+'>'+
- '<summary><span>✧ Movimento e altre missioni</span><small>Facoltativo · apri i dettagli ⌄</small></summary>'+
- '<div class="mp-sectionbody">'+
- (train?'<div class="mp-extrablock"><strong>Allenamento di oggi</strong><p class="mp-muted">'+
- (fatigue?'Con poco sonno o stanchezza, meglio recuperare.':'Puoi seguire la scheda senza attrezzi; riscaldati e fermati in caso di dolore.')+'</p>'+
- summary+
- '<button type="button" class="btn secondary full" data-life-finishworkout="'+day+'" '+(fatigue||done?'disabled':'')+'>'+
- (done?'✓ Allenamento registrato':'Segna allenamento completato')+'</button></div>':'<p class="mp-muted">Oggi nessun allenamento obbligatorio.</p>')+
- '<div class="mp-extrablock"><button type="button" class="btn secondary full" data-questtab="weekly">⚔ Obiettivi settimanali</button></div></div></details>';
+ const recovered=!!state.lifePlan?.recoveryDays?.[day];
+ const status=scheduled?(done?'Fatto':recovered?'Recupero':'Da fare'):'Prossima';
+ const label=scheduled?'Allenamento · '+(t?.label||'Seduta di oggi'):'Prossimo allenamento';
+ const subtitle=scheduled?'Ore '+(t?.time||'18:45')+' · '+(t?.duration||'20–25 min'):(next?'Previsto '+shortDate(next)+' alle '+(t?.time||'18:45'):'Nessuna seduta in programma');
+ const rows=t?.exercises||[];
+ const details=rows.length?'<div class="mp-workout-head"><strong>'+H(t.label)+'</strong><span>'+H(t.duration)+' · '+H(t.time)+'</span></div>'+
+ '<p class="mp-muted"><b>Riscaldamento:</b> '+H(t.warmup||'3 minuti di movimento leggero')+'</p>'+
+ '<div class="mp-workout-list">'+rows.map(ex=>'<div><strong>'+H(ex[0])+'</strong><span>'+H(ex[1]||'')+'</span><small>'+H(ex[2]||'')+'</small></div>').join('')+'</div>'+
+ '<p class="mp-muted"><b>Recupero tra le serie:</b> '+H(t.rest||'45–75 secondi')+'. Parti leggero e fermati in caso di dolore o capogiri.</p>':
+ '<p class="mp-muted">Nessuna scheda disponibile. Puoi personalizzarla qui sotto.</p>';
+ let action='';
+ if(scheduled){
+  if(done)action='<p class="mp-workout-success">✓ Seduta completata e 25 XP già registrati.</p>';
+  else if(recovered)action='<p class="mp-workout-success">✓ Recupero registrato. Nessuna penalità e nessun XP fittizio.</p>';
+  else {
+   const caution=t?.low?'<p class="mp-workout-alert">Hai registrato poco sonno o bassa energia: oggi è meglio il recupero. Nessun obbligo di forzare gli esercizi.</p>':'';
+   action=caution+(t?.low?'':'<button type="button" class="btn full" data-life-finishworkout="'+day+'">✓ Ho completato la seduta · +25 XP</button>')+
+   '<button type="button" class="btn secondary full" data-mp-recovery="'+day+'">Oggi scelgo il recupero</button>';
+  }
+ }else action='<p class="mp-muted">La seduta comparirà tra le quest del giorno previsto. Nei giorni liberi non devi completarla.</p>';
+ const edit='<button type="button" class="btn secondary full" data-mp-open-workout-editor>✎ Modifica la scheda di allenamento</button>';
+ return headCard('workout',label,subtitle,status,
+  '<div class="mp-workout-content">'+details+action+edit+'</div>');
+}
+function optionalPanel(state,day){
+ return '<details class="mp-section" data-mp-extra '+(extraOpen?'open':'')+'><summary><span>✧ Altre sfide</span><small>Prove settimanali ⌄</small></summary>'+
+ '<div class="mp-sectionbody"><button type="button" class="btn secondary full" data-questtab="weekly">⚔ Vai alle prove settimanali</button></div></details>';
 }
 function renderQuests(state,day){
  if(!enabled(state))return '';
  ensure(state);
  const food=window.SistemaLifePlan?.getFood?.(state,day)||{};
+ const scheduled=workoutScheduled(state,day);
  const marks=[!!state.completions?.[day]?.life_morning_sleep,eaten(state,day,'snack1'),eaten(state,day,'lunch'),eaten(state,day,'snack2'),eaten(state,day,'dinner'),!!state.completions?.[day]?.checkin];
- const n=marks.filter(Boolean).length;
+ if(scheduled)marks.splice(4,0,workoutCompleted(state,day));
+ const n=marks.filter(Boolean).length,total=marks.length;
  const lunch=getDish(state,chosen(state,day,'lunch')),dinner=getDish(state,chosen(state,day,'dinner'));
  const status=kind=>eaten(state,day,kind)?'Fatto':skipped(state,day,kind)?'Saltato':'Da fare';
- return '<div class="mp-app"><section class="mp-questtop"><div><div class="mp-eyebrow">MISSIONI DI OGGI · '+H(shortDate(day))+'</div><h2>Le tue 6 quest</h2><p>Apri una scheda per vedere cosa fare e segnarla.</p></div><div class="mp-count">'+n+'<span>/6</span></div></section>'+
+ return '<div class="mp-app"><section class="mp-questtop"><div><div class="mp-eyebrow">MISSIONI DI OGGI · '+H(shortDate(day))+'</div><h2>Le tue '+total+' quest</h2><p>Apri una scheda per vedere cosa fare e segnarla.</p></div><div class="mp-count">'+n+'<span>/'+total+'</span></div></section>'+
  headCard('sleep','Sonno','Registra le ore al risveglio',marks[0]?'Fatto':'Da fare',morningForm(state,day))+
- headCard('snack1','Spuntino del mattino · '+(food.snack1?.name||'Spuntino'), 'Ore '+(food.snack1?.time||'11:30'),status('snack1'),snackDetail(state,day,'snack1'))+
+ headCard('snack1','Spuntino del mattino · '+(food.snack1?.name||'Spuntino'),'Ore '+(food.snack1?.time||'11:30'),status('snack1'),snackDetail(state,day,'snack1'))+
  headCard('lunch','Pranzo · '+lunch.name,(dow(day)>=1&&dow(day)<=5?'Pronto al banco':'Pranzo condiviso')+' · '+(state.lifePlan.settings?.food?.lunch||'14:00'),status('lunch'),mealDetail(state,day,'lunch'))+
  headCard('snack2','Spuntino del pomeriggio · '+(food.snack2?.name||'Spuntino'),'Ore '+(food.snack2?.time||'17:30'),status('snack2'),snackDetail(state,day,'snack2'))+
+ workoutCard(state,day)+
  headCard('dinner','Cena · '+dinner.name,'Ore '+(state.lifePlan.settings?.food?.dinner||'20:30'),status('dinner'),mealDetail(state,day,'dinner'))+
- headCard('evening','Voti della giornata','Umore, energia e stress',marks[5]?'Fatto':'Da fare',eveningForm(state,day))+
+ headCard('evening','Voti della giornata','Umore, energia e stress',marks[marks.length-1]?'Fatto':'Da fare',eveningForm(state,day))+
  shoppingPanel(state,day)+monthPanel(state)+(window.SistemaMealEditor?.monthEditor?.(state)||'')+optionalPanel(state,day)+(window.SistemaMealEditor?.workoutEditor?.(state)||'')+'</div>';
 }
 function renderHome(state,level){
  const day=today(),food=window.SistemaLifePlan?.getFood?.(state,day)||{},s=stats(state);
- const marks=[!!state.completions?.[day]?.life_morning_sleep,eaten(state,day,'snack1'),eaten(state,day,'lunch'),eaten(state,day,'snack2'),eaten(state,day,'dinner'),!!state.completions?.[day]?.checkin];
- const n=marks.filter(Boolean).length;
+ const cfg=state.lifePlan?.settings||{},wd=dow(day),working=wd>=1&&wd<=5;
+ const scheduled=workoutScheduled(state,day),completeWorkout=workoutCompleted(state,day);
  const labels=['Sonno','Spuntino 1','Pranzo','Spuntino 2','Cena','Giornata'];
- const cfg=state.lifePlan?.settings||{};
- const wd=dow(day),working=wd>=1&&wd<=5;
- const taskTimes=[working?cfg.work?.wakeWork:cfg.work?.wakeOff,food.snack1?.time,food.lunch?.time,food.snack2?.time,food.dinner?.time,'23:00'];
+ const marks=[!!state.completions?.[day]?.life_morning_sleep,eaten(state,day,'snack1'),eaten(state,day,'lunch'),eaten(state,day,'snack2'),eaten(state,day,'dinner'),!!state.completions?.[day]?.checkin];
+ const times=[working?cfg.work?.wakeWork:cfg.work?.wakeOff,food.snack1?.time,food.lunch?.time,food.snack2?.time,food.dinner?.time,'23:00'];
+ if(scheduled){labels.splice(4,0,'Allenamento');marks.splice(4,0,completeWorkout);times.splice(4,0,'18:45');}
+ const n=marks.filter(Boolean).length,total=marks.length;
  const clock=t=>typeof t==='string'&&/^\d\d:\d\d$/.test(t)?Number(t.slice(0,2))*60+Number(t.slice(3)):9999;
  const now=new Date(),mins=now.getHours()*60+now.getMinutes();
- const pending=labels.map((label,i)=>({label,time:clock(taskTimes[i]),done:marks[i]})).filter(x=>!x.done);
- const upcomingTask=pending.filter(x=>x.time>=mins).sort((a,b)=>a.time-b.time)[0]||pending.sort((a,b)=>b.time-a.time)[0];
+ const pending=labels.map((label,i)=>({label,time:clock(times[i]),done:marks[i]})).filter(x=>!x.done);
+ const upcomingTask=pending.filter(x=>x.time>=mins).sort((a,b)=>a.time-b.time)[0]||pending.sort((a,b)=>a.time-b.time)[0];
  const next=upcomingTask?.label||'Tutto completato';
  const meals=['snack1','lunch','snack2','dinner'].map(kind=>({kind,time:clock(food[kind]?.time),name:food[kind]?.name||'',done:eaten(state,day,kind)||skipped(state,day,kind)})).filter(x=>!x.done);
- const upcomingMeal=meals.filter(x=>x.time>=mins).sort((a,b)=>a.time-b.time)[0]||meals.sort((a,b)=>b.time-a.time)[0];
- return '<div class="mp-app mp-home"><section class="mp-homehero"><div class="mp-eyebrow">IL SISTEMA · '+H(shortDate(day))+'</div><div class="mp-homehead"><div><h2>Oggi, un passo alla volta.</h2><p>Rango '+H(level?.rank||'E')+' · Livello '+H(level?.level||1)+' · '+H(level?.xp||0)+' XP</p></div><div class="mp-count">'+n+'<span>/6</span></div></div><div class="mp-progress"><i style="width:'+(n/6*100)+'%"></i></div><div class="mp-progresslabels">'+labels.map((label,i)=>'<span class="'+(marks[i]?'complete':'')+'">'+(marks[i]?'✓':'○')+' '+label+'</span>').join('')+'</div></section>'+
+ const upcomingMeal=meals.filter(x=>x.time>=mins).sort((a,b)=>a.time-b.time)[0]||meals.sort((a,b)=>a.time-b.time)[0];
+ const nextDate=scheduled?day:nextWorkoutDay(state,day);
+ const workout=nextDate?window.SistemaLifePlan?.training?.(state,nextDate):null;
+ const workoutStatus=scheduled?(state.completions?.[day]?.sistema_forza_v1?'✓ Completato':state.lifePlan?.recoveryDays?.[day]?'✓ Recupero':'Da fare'):(nextDate?'Prossima seduta '+shortDate(nextDate):'Da programmare');
+ const workoutCard='<section class="mp-workout-home"><div class="mp-eyebrow">⚒ ALLENAMENTO</div><div class="mp-workout-homeinfo"><strong>'+H(workout?.label||'Scheda di forza')+'</strong><span>'+H(workoutStatus)+'</span></div>'+
+ '<p>'+(scheduled?'Oggi alle '+H(workout?.time||'18:45')+' · '+H(workout?.duration||'20–25 min'):(nextDate?'Previsto '+H(shortDate(nextDate))+' alle '+H(workout?.time||'18:45'):'Apri le quest per impostare una seduta'))+'</p>'+
+ '<button type="button" class="btn secondary" data-mp-open-workout>Vedi gli esercizi</button></section>';
+ return '<div class="mp-app mp-home"><section class="mp-homehero"><div class="mp-eyebrow">IL SISTEMA · '+H(shortDate(day))+'</div><div class="mp-homehead"><div><h2>Oggi, un passo alla volta.</h2><p>Rango '+H(level?.rank||'E')+' · Livello '+H(level?.level||1)+' · '+H(level?.xp||0)+' XP</p></div><div class="mp-count">'+n+'<span>/'+total+'</span></div></div><div class="mp-progress"><i style="width:'+(n/total*100)+'%"></i></div><div class="mp-progresslabels">'+labels.map((label,i)=>'<span class="'+(marks[i]?'complete':'')+'">'+(marks[i]?'✓':'○')+' '+H(label)+'</span>').join('')+'</div></section>'+
  '<section class="mp-next"><div class="mp-eyebrow">IL PROSSIMO PASSO</div><strong>'+H(next)+'</strong><button type="button" class="btn full" data-view="quests">Apri le mie quest</button></section>'+
+ workoutCard+
  '<section class="mp-homemeals"><div><div class="mp-eyebrow">PROSSIMO PASTO O SPUNTINO</div><strong>'+H(upcomingMeal?.name||'Tutti i pasti registrati ✓')+'</strong><p>'+(upcomingMeal?'Ore '+H(food[upcomingMeal.kind]?.time||'')+' · Apri la quest per i dettagli.':'Hai segnato tutti i pasti previsti oggi.')+'</p></div><button type="button" class="btn secondary" data-view="quests">Vedi dettagli</button></section>'+
  '<div class="mp-homelinks"><button type="button" class="btn secondary" data-mp-open-month>📅 Menu del mese</button><button type="button" class="btn secondary" data-view="goals">⚔ Dungeon</button></div>'+
  '<div class="mp-hint">✧ I piatti vengono scelti considerando le tue valutazioni: '+s.rated+' recensioni registrate.</div></div>';
 }
-
 /* Private, one-day corrections are imported from a file chosen on the device.
    This public source never contains the user's actual meals or health data. */
 const CORRECTION_KIND='il-sistema-meal-correction-v1';
