@@ -96,3 +96,26 @@
 
 .mp-workout-list{display:grid;gap:7px;margin:9px 0}.mp-workout-list>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 9px;padding:10px;border:1px solid rgba(130,188,239,.2);background:rgba(77,139,195,.09);border-radius:10px}
 .mp-workout-list strong{font-size:13px;color:#eaf6fe}.mp-workout-list span{font-size:12px;font-weight:850;color:#a7e5f9}.mp-workout-list small{grid-column:1/-1;font-size:11px;color:#a9bfd8}
+
+
+/* V5.5 — visible training in daily quests and at-a-glance on Home */
+.mp-app .mp-quest[data-mp-quest="workout"]{border:1px solid rgba(114,207,238,.5);background:linear-gradient(128deg,#1c3850,#13263c);box-shadow:0 3px 18px rgba(20,105,148,.16)}
+.mp-app .mp-quest[data-mp-quest="workout"] .mp-icon{color:#e0f7fc;background:linear-gradient(145deg,#267e99,#22415c)}
+.mp-app .mp-quest[data-mp-quest="workout"][open]{border-color:#9bddef}
+.mp-workout-content{display:grid;gap:12px}
+.mp-workout-content .mp-workout-list{display:grid;gap:9px;margin:4px 0 6px}
+.mp-workout-content .mp-workout-list>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 12px;padding:12px;border:1px solid rgba(129,190,235,.18);background:rgba(79,132,197,.09);border-radius:12px}
+.mp-workout-content .mp-workout-list strong{font-size:13px;color:#eefaff}
+.mp-workout-content .mp-workout-list span{font-size:12px;font-weight:850;color:#8cdbed}
+.mp-workout-content .mp-workout-list small{grid-column:1/-1;font-size:12px;line-height:1.4;color:#b2c8df}
+.mp-workout-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.mp-workout-head strong{font-size:16px;color:#d5f6ff}
+.mp-workout-head span{font-size:12px;color:#92cde4;text-align:right;white-space:nowrap}
+.mp-workout-alert{padding:11px 12px;background:rgba(226,186,101,.11);border-left:3px solid #edc778;border-radius:9px;font-size:12px;line-height:1.5;color:#e8dcc4}
+.mp-workout-success{padding:12px;background:rgba(72,185,146,.13);border:1px solid rgba(99,213,168,.3);border-radius:10px;color:#b0f1d2;font-weight:700;font-size:13px}
+.mp-workout-home{display:grid;gap:9px;border:1px solid rgba(107,198,226,.42);border-left:4px solid #82dcf5;border-radius:15px;padding:15px;background:radial-gradient(ellipse at 98% -12%,rgba(116,203,230,.14),transparent 60%),linear-gradient(115deg,#19374b,#12243b);box-shadow:0 6px 18px rgba(0,0,0,.12)}
+.mp-workout-homeinfo{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:7px}
+.mp-workout-homeinfo strong{font-size:16px;color:#e1f6fb}
+.mp-workout-homeinfo span{font-size:11px;padding:5px 9px;border-radius:30px;color:#a2e8e0;background:rgba(55,144,146,.19);font-weight:750}
+.mp-workout-home p{font-size:12px;color:#b2cadb;line-height:1.4;margin:0}
+.mp-workout-home .btn{justify-self:start;min-height:41px;font-size:12px}
