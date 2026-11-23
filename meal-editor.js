@@ -8,10 +8,10 @@ const today=()=>{const d=new Date();return [d.getFullYear(),('0'+(d.getMonth()+1
 const after=(day,n)=>{const d=new Date(day+'T12:00:00');d.setDate(d.getDate()+n);return [d.getFullYear(),('0'+(d.getMonth()+1)).slice(-2),('0'+d.getDate()).slice(-2)].join('-')};
 const list=text=>String(text||'').split(/[;\n]/).map(s=>s.trim().slice(0,140)).filter(Boolean).slice(0,12);
 const hash=str=>{let h=2166136261;for(let i=0;i<str.length;i++)h=Math.imul(h^str.charCodeAt(i),16777619);return 'item_'+(h>>>0).toString(36)};
-let openCard='',openMonth=false,openRow='',monthDate='',monthKind='dinner';
+let openCard='',openMonth=false,openRow='',openShop=false,openWorkout=false,workDate='',monthDate='',monthKind='dinner';
 function lp(state){
  const p=state.lifePlan=state.lifePlan||{};
- for(const k of ['customMeals','snackOverrides','shoppingOverrides','shopping','mealReviews']){
+ for(const k of ['customMeals','snackOverrides','shoppingOverrides','shopping','mealReviews','workoutOverrides']){
   if(!p[k]||typeof p[k]!=='object'||Array.isArray(p[k]))p[k]={};
  }
  return p;
@@ -100,13 +100,36 @@ function shoppingPanel(state,day){
  '<button type="button" class="me-tool me-delete" data-me-remove="'+esc(item)+'" data-day="'+day+'" aria-label="Rimuovi prodotto">×</button></div>'+
  (openRow===day+':'+item?'<form class="me-rename" data-me-rename-form data-day="'+day+'" data-old="'+esc(item)+'"><input name="name" maxlength="140" required value="'+esc(item)+'"><button class="btn secondary" type="submit">Salva</button></form>':'')+
  '</div>').join('');
- return '<details class="mp-section me-shopping" data-mp-shopping><summary><span>🛒 Lista della spesa</span><small>'+items.length+' prodotti · modificabile ⌄</small></summary>'+
+ return '<details class="mp-section me-shopping" data-mp-shopping '+(openShop?'open':'')+'><summary><span>🛒 Lista della spesa</span><small>'+items.length+' prodotti · modificabile ⌄</small></summary>'+
  '<div class="mp-sectionbody"><p class="mp-muted">Modifica quantità, aggiungi prodotti o rimuovili. Gli acquisti per pasti già mangiati scompaiono dalla lista.</p>'+
  (rows||'<p class="mp-muted">Nessun acquisto necessario oggi.</p>')+
  '<form data-me-add data-day="'+day+'" class="me-add"><input name="name" maxlength="140" required placeholder="Nuovo prodotto / quantità"><button class="btn" type="submit">Aggiungi</button></form>'+
  '<div class="me-restore"><button class="btn secondary" type="button" data-life-copyshop="'+day+'">Copia</button>'+
  '<button class="btn secondary" type="button" data-me-reset data-day="'+day+'">Ripristina automatica</button></div></div></details>';
 }
+
+function workoutEditor(state){
+ const d=workDate&&isoDay(workDate)?workDate:today(),x=lp(state).workoutOverrides[d]||{};
+ const notes=Array.isArray(x.exercises)?x.exercises.map(a=>a.join(' | ')).join('\n'):'';
+ return '<details class="mp-section me-workout" data-me-workout '+(openWorkout?'open':'')+'>'+
+ '<summary><span>⚒ Modifica una scheda allenamento</span><small>Anche esercizi e serie ⌄</small></summary>'+
+ '<div class="mp-sectionbody"><label class="me-workdate">Giorno<input type="date" data-me-workdate value="'+d+'" min="'+today()+'" max="'+after(today(),60)+'"></label>'+
+ '<form class="me-form" data-me-workform data-day="'+d+'">'+
+ '<label>Nome della seduta<input name="title" maxlength="90" required value="'+esc(x.title||'Seduta a casa')+'"></label>'+
+ '<label>Una riga per esercizio: nome | serie x ripetizioni | istruzioni<textarea name="exercises" maxlength="1700" rows="5" required placeholder="Squat alla sedia | 2 x 8 | Vai piano">'+esc(notes)+'</textarea></label>'+
+ '<label>Durata (minuti)<input name="minutes" type="number" min="5" max="45" value="'+esc(x.minutes||20)+'"></label>'+
+ '<button type="submit" class="btn full">Salva scheda</button></form></div></details>';
+}
+function updateWorkout(state,d,v){
+ if(!isoDay(d))throw Error('Data non valida');
+ const name=String(v.title||'').trim().slice(0,90);
+ const raw=Array.isArray(v.exercises)?v.exercises:String(v.exercises||'').split('\n').filter(Boolean).map(a=>a.split('|').map(z=>z.trim()));
+ const exercises=raw.filter(a=>Array.isArray(a)&&a[0]).map(a=>[String(a[0]).slice(0,110),String(a[1]||'2 x 8').slice(0,80),String(a[2]||'Movimento controllato').slice(0,180)]).slice(0,8);
+ if(!name||!exercises.length)throw Error('Inserisci nome e almeno un esercizio');
+ lp(state).workoutOverrides[d]={title:name,exercises,minutes:Math.max(5,Math.min(45,Number(v.minutes)||20))};
+ return name;
+}
+
 function attach(state,persist,render,toast){
  if(!state?.lifePlan?.settings?.activated)return;
  const doc=document,save=msg=>{persist();render();toast(msg)};
@@ -116,15 +139,19 @@ function attach(state,persist,render,toast){
   try{updateMeal(state,f.dataset.day,f.dataset.kind,{name:v.get('name'),ingredients:v.get('ingredients'),how:v.get('how'),shop:v.get('shop')});save('Pasto modificato ✓')}catch(err){toast(err.message)}
  }));
  doc.querySelector('[data-me-month]')?.addEventListener('toggle',e=>{openMonth=e.currentTarget.open});
+ doc.querySelector('[data-mp-shopping]')?.addEventListener('toggle',e=>{openShop=e.currentTarget.open});
  doc.querySelector('[data-me-date]')?.addEventListener('change',e=>{monthDate=e.currentTarget.value;openMonth=true;render()});
  doc.querySelector('[data-me-kind]')?.addEventListener('change',e=>{monthKind=e.currentTarget.value;openMonth=true;render()});
- doc.querySelectorAll('[data-me-add]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();try{addShopping(state,f.dataset.day,new FormData(f).get('name'));save('Prodotto aggiunto ✓')}catch(err){toast(err.message)}}));
- doc.querySelectorAll('[data-me-remove]').forEach(b=>b.addEventListener('click',()=>{removeShopping(state,b.dataset.day,b.dataset.meRemove);save('Prodotto rimosso')}));
- doc.querySelectorAll('[data-me-rename]').forEach(b=>b.addEventListener('click',()=>{openRow=b.dataset.day+':'+b.dataset.meRename;render()}));
- doc.querySelectorAll('[data-me-rename-form]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();
+ doc.querySelectorAll('[data-me-add]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();openShop=true;try{addShopping(state,f.dataset.day,new FormData(f).get('name'));save('Prodotto aggiunto ✓')}catch(err){toast(err.message)}}));
+ doc.querySelectorAll('[data-me-remove]').forEach(b=>b.addEventListener('click',()=>{openShop=true;removeShopping(state,b.dataset.day,b.dataset.meRemove);save('Prodotto rimosso')}));
+ doc.querySelectorAll('[data-me-rename]').forEach(b=>b.addEventListener('click',()=>{openShop=true;openRow=b.dataset.day+':'+b.dataset.meRename;render()}));
+ doc.querySelectorAll('[data-me-rename-form]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();openShop=true;
   try{const old=f.dataset.old,newName=String(new FormData(f).get('name')||'').trim();const bought=!!lp(state).shopping[f.dataset.day]?.[hash(old)];removeShopping(state,f.dataset.day,old);addShopping(state,f.dataset.day,newName);if(bought){lp(state).shopping[f.dataset.day]=lp(state).shopping[f.dataset.day]||{};lp(state).shopping[f.dataset.day][hash(newName)]=true;}openRow='';save('Prodotto modificato ✓')}catch(err){toast(err.message)}
  }));
- doc.querySelectorAll('[data-me-reset]').forEach(b=>b.addEventListener('click',()=>{if(!confirm('Ripristinare la lista automatica?'))return;delete lp(state).shoppingOverrides[b.dataset.day];save('Lista ripristinata')}));
+ doc.querySelectorAll('[data-me-reset]').forEach(b=>b.addEventListener('click',()=>{openShop=true;if(!confirm('Ripristinare la lista automatica?'))return;delete lp(state).shoppingOverrides[b.dataset.day];save('Lista ripristinata')}));
+ doc.querySelector('[data-me-workout]')?.addEventListener('toggle',e=>{openWorkout=e.currentTarget.open});
+ doc.querySelector('[data-me-workdate]')?.addEventListener('change',e=>{workDate=e.currentTarget.value;openWorkout=true;render()});
+ doc.querySelector('[data-me-workform]')?.addEventListener('submit',e=>{e.preventDefault();const f=e.currentTarget,v=new FormData(f);try{updateWorkout(state,f.dataset.day,{title:v.get('title'),exercises:v.get('exercises'),minutes:v.get('minutes')});save('Scheda aggiornata ✓')}catch(err){toast(err.message)}});
 }
-window.SistemaMealEditor={editMeal,monthEditor,shoppingPanel,mergeShoppingList,updateMeal,attach};
+window.SistemaMealEditor={editMeal,monthEditor,shoppingPanel,mergeShoppingList,updateMeal,workoutEditor,updateWorkout,attach};
 })();
