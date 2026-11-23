@@ -270,7 +270,7 @@ function workoutCard(state,day){
    '<button type="button" class="btn secondary full" data-mp-recovery="'+day+'">Oggi scelgo il recupero</button>';
   }
  }else action='<p class="mp-muted">La seduta comparirà tra le quest del giorno previsto. Nei giorni liberi non devi completarla.</p>';
- const edit='<button type="button" class="btn secondary full" data-mp-open-workout-editor>✎ Modifica la scheda di allenamento</button>';
+ const edit='<button type="button" class="btn secondary full" data-mp-open-workout-editor data-mp-edit-day="'+H(next||day)+'">✎ Modifica la scheda di allenamento</button>';
  return headCard('workout',label,subtitle,status,
   '<div class="mp-workout-content">'+details+action+edit+'</div>');
 }
@@ -440,7 +440,9 @@ function attach(state,persist,renderApp,toast){if(!enabled(state))return;ensure(
   const editor=doc.querySelector('[data-me-workout]');
   if(!editor)return toast('Editor allenamento non disponibile.');
   editor.open=true;
-  requestAnimationFrame(()=>editor.scrollIntoView({behavior:'smooth',block:'start'}));
+  const field=editor.querySelector('[data-me-workdate]'),target=b.dataset.mpEditDay;
+  if(field&&target&&field.value!==target){field.value=target;field.dispatchEvent(new Event('change',{bubbles:true}));}
+  requestAnimationFrame(()=>doc.querySelector('[data-me-workout]')?.scrollIntoView({behavior:'smooth',block:'start'}));
  }));
  doc.querySelectorAll('[data-mp-open-workout]').forEach(b=>b.addEventListener('click',()=>{
   openQuest='workout';
