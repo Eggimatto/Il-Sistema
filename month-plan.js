@@ -162,10 +162,14 @@ let unsaved=false;
 function ensure(state){
  if(!enabled(state))return null;
  const p=data(state);let m=p.monthMenu;const current=today();
- if(!m||m.version!==5||!m.anchor||add(m.anchor,MAX_DAYS-1)<current){
+ if(!m||m.version!==5||!m.anchor){
   const legacy={};for(const date of planDates(current)){const l={};for(const kind of ['lunch','dinner'])if(p.meals?.[date]?.[kind]||(kind==='lunch'&&p.lunchChoices?.[date]))l[kind]=true;if(Object.keys(l).length)legacy[date]=l;}
   m={version:5,anchor:current,entries:{},locked:{},legacy,legacySnapshots:{},updatedAt:null};p.monthMenu=m;build(state,current);unsaved=true;
- }else if(!m.entries||!m.locked){m.entries=m.entries||{};m.locked=m.locked||{};build(state,m.anchor);unsaved=true;}
+ }else if(m.anchor<current||!m.entries||!m.locked){
+  // Keep locked and completed historical days, while always extending the next 30 days.
+  m.entries=m.entries||{};m.locked=m.locked||{};m.anchor=current;
+  build(state,current);unsaved=true;
+ }
  return m;
 }
 function chosen(state,day,kind){const m=ensure(state);return m?.entries?.[day]?.[kind]||pool(state,day,kind)[0]?.id||PIZZA.id;}
