@@ -67,6 +67,7 @@ button{min-width:0}.btn.smallbtn{min-height:41px;padding:9px 13px;font-size:12px
 @media(max-width:700px){.simple-week-grid{grid-template-columns:1fr}.simple-dayhero{padding:16px}.clear-dungeon .panel{padding:14px}}
 
 </style>
+<link rel="stylesheet" href="ui-v54.css" />
 </head>
 <body>
 <div id="app"></div><div id="toast" class="stealth" role="status" aria-live="polite"></div>
@@ -75,6 +76,7 @@ button{min-width:0}.btn.smallbtn{min-height:41px;padding:9px 13px;font-size:12px
 <script src="food-plan.js"></script>
 <script src="push.js"></script>
 <script src="month-plan.js"></script>
+<script src="meal-editor.js"></script>
 <script>
 /* IL SISTEMA V4 — private, device-owned life-plan engine.
    No personal profile data or secrets are embedded in this public file.
@@ -151,14 +153,15 @@ function fatigue(state,day){
  const current=Object.keys(log).length?log:(state.logs?.[prevKey]||{});
  return (typeof current.sleepHours==='number'&&current.sleepHours<5)||(typeof current.energy==='number'&&current.energy<=2);
 }
-function trainingDay(state,day){return !!state.lifePlan?.settings?.fitness?.days.includes(weekDay(day));}
+function trainingDay(state,day){return !!state.lifePlan?.workoutOverrides?.[day]||!!state.lifePlan?.settings?.fitness?.days.includes(weekDay(day));}
 function training(state,day){
  const dayN=weekDay(day),cfg=state.lifePlan.settings,ordered=cfg.fitness.days,idx=ordered.indexOf(dayN);
  const low=fatigue(state,day);
  const exercises=idx%2===0?
  [ ['Squat alla sedia','2 × 6–10','Scendi lentamente fino a sfiorare una sedia stabile e rialzati'],['Piegamenti al muro','2 × 6–10','Mani alla parete, corpo in asse'],['Ponte glutei a terra','2 × 8–12','Solleva il bacino senza inarcare la schiena'],['Bird dog','2 × 6 per lato','In quadrupedia, allunga braccio e gamba opposti con controllo'] ]:
  [ ['Affondi assistiti','2 × 6 per lato','Tieni un appoggio stabile e non andare in profondità se perdi equilibrio'],['Piegamenti su piano stabile','2 × 6–10','Usa un piano robusto; in alternativa il muro'],['Hip hinge senza pesi','2 × 8–10','Piegati dal bacino mantenendo la schiena neutra'],['Superman alternato lieve','2 × 6 per lato','Disteso prono, solleva poco un braccio e gamba opposti'] ];
- return {scheduled:trainingDay(state,day),low,exercises,label:idx%2===0?'Seduta A · corpo intero':'Seduta B · corpo intero',time:'18:45',duration:'20–25 min',rest:'45–75 secondi tra le serie',warmup:'3 minuti di marcia sul posto e mobilità leggera'};
+ const custom=state.lifePlan?.workoutOverrides?.[day];
+ return {scheduled:trainingDay(state,day),low,exercises:custom?.exercises?.length?custom.exercises:exercises,label:custom?.title||(idx%2===0?'Seduta A · corpo intero':'Seduta B · corpo intero'),time:'18:45',duration:custom?.minutes?custom.minutes+' min':'20–25 min',rest:'45–75 secondi tra le serie',warmup:'3 minuti di marcia sul posto e mobilità leggera'};
 }
 const entry=(name,ingredients,method,shop,optional='')=>({name,ingredients,method,shop,optional});
 const MEALS=[{id:'snack1',label:'Spuntino facile',ico:'✦'},{id:'lunch',label:'Pranzo',ico:'◉'},{id:'snack2',label:'Spuntino flessibile',ico:'✧'},{id:'dinner',label:'Cena',ico:'☾'}];
@@ -214,7 +217,8 @@ function shoppingList(state,day){
  const meals=getFood(state,day),eaten=state.lifePlan?.meals?.[day]||{},skipped=state.lifePlan?.skippedMeals?.[day]||{};
  const today=day===todayKey(),afterOfficeLunch=today&&new Date().getHours()>=18;
  const ids=['snack1','lunch','snack2','dinner'].filter(id=>!eaten[id]&&!skipped[id]&&!(id==='lunch'&&meals.workLunch&&afterOfficeLunch));
- return Array.from(new Set(ids.flatMap(id=>meals[id].shop||[]).filter(x=>!x.startsWith('ingredienti solo'))));
+ const base=Array.from(new Set(ids.flatMap(id=>meals[id].shop||[]).filter(x=>!x.startsWith('ingredienti solo'))));
+ return window.SistemaMealEditor?.mergeShoppingList?.(state,day,base)||base;
 }
 function getQuests(state,day){
  if(!enabled(state))return [];
@@ -675,6 +679,7 @@ function attachPageHandlers(){
  window.SistemaFoodPlan?.attach?.(state,persist,render,toast);
  window.SistemaLifePlan?.attach?.(state,persist,render,toast);
  window.SistemaMonthPlan?.attach?.(state,persist,render,toast);
+ window.SistemaMealEditor?.attach?.(state,persist,render,toast);
  window.SistemaPush?.attach?.(state);
  document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{view=b.dataset.view;activeDungeonId=null;logDate=dateKey(new Date());render();window.scrollTo(0,0)}));
  document.querySelectorAll('[data-quest]').forEach(input=>input.addEventListener('change',()=>{const {quest:id,day}=input.dataset;state.completions[day]=state.completions[day]||{};const wasChecked=input.checked;if(wasChecked)state.completions[day][id]=new Date().toISOString();else delete state.completions[day][id];persist();render();toast(wasChecked?'Quest completata. Esperienza ottenuta!':'Quest annullata.')}));
