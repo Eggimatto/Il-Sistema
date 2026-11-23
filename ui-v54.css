@@ -1,0 +1,75 @@
+/* IL SISTEMA V5.4 — clearer, more polished mobile UI; no personal data in styles */
+:root{--v54-cyan:#7ad6f4;--v54-gold:#e7c885;--v54-ink:#eaf5ff;--v54-muted:#a5bcd6}
+.mp-app{max-width:920px!important;gap:12px!important;padding-bottom:24px}
+.mp-app .mp-homehero,.mp-app .mp-questtop{
+  position:relative;overflow:hidden;
+  background:radial-gradient(ellipse at 108% -15%,rgba(90,191,244,.19),transparent 53%),linear-gradient(135deg,#263a61 0%,#172740 46%,#0d1b31 100%);
+  border:1px solid rgba(117,207,246,.36);padding:19px 18px;border-radius:19px;
+  box-shadow:0 10px 29px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.08);
+}
+.mp-app .mp-homehero::before,.mp-app .mp-questtop::before{
+ content:"";position:absolute;right:-48px;top:-64px;width:195px;height:195px;border:19px solid rgba(91,179,245,.06);
+ border-radius:50%;box-shadow:0 0 0 24px rgba(115,162,255,.035);pointer-events:none
+}
+.mp-app .mp-homehero>* ,.mp-app .mp-questtop>*{position:relative}
+.mp-app .mp-homehero h2,.mp-app .mp-questtop h2{font-size:clamp(19px,5vw,25px);line-height:1.2;letter-spacing:-.035em;margin:5px 0 9px}
+.mp-app .mp-eyebrow{color:#92dafa;letter-spacing:.12em;font-weight:900}
+.mp-app .mp-count{font-size:33px;color:#d5f7ff;text-shadow:0 0 19px rgba(85,207,247,.36);font-variant-numeric:tabular-nums}
+.mp-app .mp-progress{height:9px;border-radius:10px;background:#17243c;overflow:hidden}
+.mp-app .mp-progress i{background:linear-gradient(90deg,#7992fa,#52d1ec,#86e6c3);border-radius:10px}
+.mp-app .mp-progresslabels{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px 8px;margin-top:8px}
+.mp-app .mp-progresslabels span{font-size:11px;background:rgba(109,162,227,.07);border:1px solid rgba(150,192,247,.1);padding:7px 3px;border-radius:9px}
+.mp-app .mp-progresslabels span.complete{background:rgba(55,173,137,.1);border-color:rgba(76,212,163,.22)}
+.mp-app .mp-quest{border:1px solid rgba(131,174,230,.24);border-radius:15px;background:linear-gradient(115deg,#172a43,#121f34);box-shadow:0 4px 13px rgba(0,0,0,.1)}
+.mp-app .mp-quest[open]{border-color:#62bfe4;background:linear-gradient(100deg,#1b314e,#101d32)}
+.mp-app .mp-quest summary{min-height:67px;padding:12px 13px;gap:12px}
+.mp-app .mp-icon{height:40px;width:40px;border-radius:13px;background:linear-gradient(148deg,#2b5478,#18344c);border:1px solid rgba(149,213,244,.2);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.mp-app .mp-headtext strong{font-size:14px;color:#f0f7ff}.mp-app .mp-headtext small{line-height:1.4}
+.mp-app .mp-status{font-weight:800;letter-spacing:.01em}
+.mp-app .mp-status.ok{background:#184738;color:#9ef0d2;border:1px solid rgba(94,226,179,.3)}
+.mp-app .mp-detail{background:linear-gradient(180deg,#14253c,#101d31);padding:13px 15px}
+.mp-app .mp-next,.mp-app .mp-homemeals{
+ border-radius:16px;background:linear-gradient(139deg,#1a2d48,#122038);
+ border:1px solid rgba(129,181,232,.27);
+ box-shadow:0 5px 19px rgba(0,0,0,.13);
+ padding:16px;
+}
+.mp-app .mp-next{border-left:3px solid #80d2ef}
+.mp-app .mp-homemeals{border-left:3px solid #d3bff6}
+.mp-app .mp-next strong{font-size:19px}
+.mp-app .mp-homemeals strong{font-size:16px}
+.mp-app .mp-section{background:linear-gradient(135deg,#17263d,#111e32);border:1px solid rgba(134,177,234,.25);border-radius:15px}
+.mp-app .mp-section>summary{padding:15px;cursor:pointer}
+.mp-app .mp-section[open]>summary{border-bottom:1px solid rgba(153,178,219,.18)}
+.mp-app button,.mp-app input,.mp-app select,.mp-app textarea{touch-action:manipulation}
+.mp-app button:focus-visible,.mp-app input:focus-visible,.mp-app select:focus-visible,.mp-app textarea:focus-visible,.mp-app summary:focus-visible{outline:2px solid #8addf6;outline-offset:3px}
+.me-editor{margin:10px 0 0;border:1px solid rgba(129,181,227,.27);background:rgba(61,113,169,.09);border-radius:12px}
+.me-editor summary{cursor:pointer;list-style:none;padding:12px;font-size:13px;font-weight:850;color:#a2e2fa}
+.me-editor[open] summary{border-bottom:1px solid rgba(158,201,238,.17)}
+.me-form{display:grid;gap:11px;padding:12px}
+.me-form label,.me-grid label{display:grid;gap:6px;font-size:12px;font-weight:700;color:#b8cde6}
+.me-form input,.me-form textarea,.me-grid input,.me-grid select,.me-add input,.me-rename input{font:inherit;color:#eff8ff;background:#101f35;width:100%;min-width:0;min-height:43px;line-height:1.4;border:1px solid rgba(150,183,236,.28);border-radius:10px;padding:10px}
+.me-form textarea{resize:vertical;min-height:64px}
+.me-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.me-month .mp-sectionbody{padding:12px}
+.me-shoprow{background:rgba(80,131,192,.09);border:1px solid rgba(137,182,237,.17);border-radius:11px;margin-bottom:8px}
+.me-shopline{display:flex;align-items:center;gap:8px;padding:8px}
+.me-shopline>input{width:20px;height:20px;accent-color:#64cbf0;flex:none}
+.me-shopline label{min-width:0;flex:1;font-size:13px;line-height:1.4;overflow-wrap:anywhere;color:#eaf4ff;cursor:pointer}
+.me-shopline label.me-done{text-decoration:line-through;color:#8da9af}
+.me-tool{flex:none;width:34px;min-width:34px;min-height:38px;background:rgba(116,160,226,.13);border:1px solid rgba(130,189,246,.24);border-radius:10px;color:#b7e4f8;font-size:18px;cursor:pointer}
+.me-tool.me-delete{color:#ffb6aa}
+.me-add,.me-rename{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin:12px 0 4px}
+.me-rename{padding:0 8px 8px}
+.me-add button,.me-rename button{font-size:12px;min-height:43px}
+.me-restore{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+.me-restore .btn{font-size:12px;white-space:normal;min-width:0}
+.me-shopping .mp-sectionbody{padding:12px}
+@media(max-width:370px){
+ .me-grid,.me-restore{grid-template-columns:1fr}
+ .me-shopline{gap:5px;padding:7px}.me-tool{width:30px;min-width:30px;min-height:36px}
+ .mp-app .mp-homehero,.mp-app .mp-questtop{padding:15px 13px}
+ .mp-app .mp-icon{width:35px;height:35px}.mp-app .mp-quest summary{padding:10px 9px;gap:8px}
+ .mp-app .mp-headtext strong{font-size:13px}
+}
+@media(prefers-reduced-motion:no-preference){.mp-app .mp-quest,.mp-app .mp-next,.mp-app .mp-homemeals{transition:border-color .18s ease,box-shadow .18s ease}}
