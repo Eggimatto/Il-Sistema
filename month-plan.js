@@ -251,7 +251,7 @@ function renderQuests(state,day){
  headCard('snack2','Spuntino del pomeriggio · '+(food.snack2?.name||'Spuntino'),'Ore '+(food.snack2?.time||'17:30'),status('snack2'),snackDetail(state,day,'snack2'))+
  headCard('dinner','Cena · '+dinner.name,'Ore '+(state.lifePlan.settings?.food?.dinner||'20:30'),status('dinner'),mealDetail(state,day,'dinner'))+
  headCard('evening','Voti della giornata','Umore, energia e stress',marks[5]?'Fatto':'Da fare',eveningForm(state,day))+
- shoppingPanel(state,day)+monthPanel(state)+(window.SistemaMealEditor?.monthEditor?.(state)||'')+optionalPanel(state,day)+'</div>';
+ shoppingPanel(state,day)+monthPanel(state)+(window.SistemaMealEditor?.monthEditor?.(state)||'')+optionalPanel(state,day)+(window.SistemaMealEditor?.workoutEditor?.(state)||'')+'</div>';
 }
 function renderHome(state,level){
  const day=today(),food=window.SistemaLifePlan?.getFood?.(state,day)||{},s=stats(state);
