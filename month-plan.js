@@ -235,10 +235,19 @@ function customForm(){return '<details class="mp-custom"><summary>+ Aggiungi una
 function optionalPanel(state,day){
  const life=window.SistemaLifePlan;
  const train=life?.trainingDay?.(state,day),fatigue=life?.fatigue?.(state,day);
- const trainDone=!!state.completions?.[day]?.sistema_forza_v1;
- return '<details class="mp-section" data-mp-extra '+(extraOpen?'open':'')+'><summary><span>✧ Altre attività facoltative</span><small>Movimento e sfide settimanali ⌄</small></summary><div class="mp-sectionbody">'+
- (train?'<div class="mp-extrablock"><strong>Allenamento di oggi</strong><p class="mp-muted">'+(fatigue?'Con poco sonno o molta stanchezza, privilegia il recupero.':'Allenamento breve a casa, senza attrezzi. Procedi gradualmente.')+'</p><button type="button" class="btn secondary full" data-life-finishworkout="'+day+'" '+(fatigue||trainDone?'disabled':'')+'>'+(trainDone?'✓ Allenamento registrato':'Segna allenamento completato')+'</button></div>':'')+
- '<div class="mp-extrablock"><button type="button" class="btn secondary full" data-questtab="weekly">⚔ Vai alle prove settimanali</button></div></div></details>';
+ const done=!!state.completions?.[day]?.sistema_forza_v1;
+ const custom=state.lifePlan?.workoutOverrides?.[day];
+ const summary=custom?'<div class="mp-extrablock"><strong>'+H(custom.title)+'</strong><p class="mp-muted">Durata: '+H(custom.minutes||20)+' min</p>'+
+ '<div class="mp-workout-list">'+(custom.exercises||[]).map(x=>'<div><strong>'+H(x[0])+'</strong><span>'+H(x[1])+'</span><small>'+H(x[2])+'</small></div>').join('')+'</div></div>':'';
+ return '<details class="mp-section" data-mp-extra '+(extraOpen?'open':'')+'>'+
+ '<summary><span>✧ Movimento e altre missioni</span><small>Facoltativo · apri i dettagli ⌄</small></summary>'+
+ '<div class="mp-sectionbody">'+
+ (train?'<div class="mp-extrablock"><strong>Allenamento di oggi</strong><p class="mp-muted">'+
+ (fatigue?'Con poco sonno o stanchezza, meglio recuperare.':'Puoi seguire la scheda senza attrezzi; riscaldati e fermati in caso di dolore.')+'</p>'+
+ summary+
+ '<button type="button" class="btn secondary full" data-life-finishworkout="'+day+'" '+(fatigue||done?'disabled':'')+'>'+
+ (done?'✓ Allenamento registrato':'Segna allenamento completato')+'</button></div>':'<p class="mp-muted">Oggi nessun allenamento obbligatorio.</p>')+
+ '<div class="mp-extrablock"><button type="button" class="btn secondary full" data-questtab="weekly">⚔ Obiettivi settimanali</button></div></div></details>';
 }
 function renderQuests(state,day){
  if(!enabled(state))return '';
