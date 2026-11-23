@@ -140,17 +140,17 @@ function attach(state,persist,render,toast){
  }));
  doc.querySelector('[data-me-month]')?.addEventListener('toggle',e=>{openMonth=e.currentTarget.open});
  doc.querySelector('[data-mp-shopping]')?.addEventListener('toggle',e=>{openShop=e.currentTarget.open});
- doc.querySelector('[data-me-date]')?.addEventListener('change',e=>{monthDate=e.currentTarget.value;openMonth=true;render()});
- doc.querySelector('[data-me-kind]')?.addEventListener('change',e=>{monthKind=e.currentTarget.value;openMonth=true;render()});
+ doc.querySelector('[data-me-date]')?.addEventListener('change',e=>{monthDate=e.currentTarget.value;openMonth=true;render();requestAnimationFrame(()=>document.querySelector('[data-me-month]')?.scrollIntoView({block:'start'}))});
+ doc.querySelector('[data-me-kind]')?.addEventListener('change',e=>{monthKind=e.currentTarget.value;openMonth=true;render();requestAnimationFrame(()=>document.querySelector('[data-me-month]')?.scrollIntoView({block:'start'}))});
  doc.querySelectorAll('[data-me-add]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();openShop=true;try{addShopping(state,f.dataset.day,new FormData(f).get('name'));save('Prodotto aggiunto ✓')}catch(err){toast(err.message)}}));
  doc.querySelectorAll('[data-me-remove]').forEach(b=>b.addEventListener('click',()=>{openShop=true;removeShopping(state,b.dataset.day,b.dataset.meRemove);save('Prodotto rimosso')}));
- doc.querySelectorAll('[data-me-rename]').forEach(b=>b.addEventListener('click',()=>{openShop=true;openRow=b.dataset.day+':'+b.dataset.meRename;render()}));
+ doc.querySelectorAll('[data-me-rename]').forEach(b=>b.addEventListener('click',()=>{openShop=true;openRow=b.dataset.day+':'+b.dataset.meRename;openShop=true;render();requestAnimationFrame(()=>document.querySelector('[data-mp-shopping]')?.scrollIntoView({block:'start'}))}));
  doc.querySelectorAll('[data-me-rename-form]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();openShop=true;
   try{const old=f.dataset.old,newName=String(new FormData(f).get('name')||'').trim();const bought=!!lp(state).shopping[f.dataset.day]?.[hash(old)];removeShopping(state,f.dataset.day,old);addShopping(state,f.dataset.day,newName);if(bought){lp(state).shopping[f.dataset.day]=lp(state).shopping[f.dataset.day]||{};lp(state).shopping[f.dataset.day][hash(newName)]=true;}openRow='';save('Prodotto modificato ✓')}catch(err){toast(err.message)}
  }));
  doc.querySelectorAll('[data-me-reset]').forEach(b=>b.addEventListener('click',()=>{openShop=true;if(!confirm('Ripristinare la lista automatica?'))return;delete lp(state).shoppingOverrides[b.dataset.day];save('Lista ripristinata')}));
  doc.querySelector('[data-me-workout]')?.addEventListener('toggle',e=>{openWorkout=e.currentTarget.open});
- doc.querySelector('[data-me-workdate]')?.addEventListener('change',e=>{workDate=e.currentTarget.value;openWorkout=true;render()});
+ doc.querySelector('[data-me-workdate]')?.addEventListener('change',e=>{workDate=e.currentTarget.value;openWorkout=true;render();requestAnimationFrame(()=>document.querySelector('[data-me-workout]')?.scrollIntoView({block:'start'}))});
  doc.querySelector('[data-me-workform]')?.addEventListener('submit',e=>{e.preventDefault();const f=e.currentTarget,v=new FormData(f);try{updateWorkout(state,f.dataset.day,{title:v.get('title'),exercises:v.get('exercises'),minutes:v.get('minutes')});save('Scheda aggiornata ✓')}catch(err){toast(err.message)}});
 }
 window.SistemaMealEditor={editMeal,monthEditor,shoppingPanel,mergeShoppingList,updateMeal,workoutEditor,updateWorkout,attach};
