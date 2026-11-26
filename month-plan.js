@@ -183,12 +183,12 @@ function ensure(state){
   m.anchor=current;build(state,current,true);unsaved=true;
  }
  // Revise only unconsumed planned deli recipes. Preserve historical IDs, ratings and manual edits.
- if(N?.deliReplacement&&m.deliRevision!==2){
+ if(N?.deliReplacement&&m.deliRevision!==3){
   for(const [d,row] of Object.entries(m.entries||{})){
    if(d<current||p.meals?.[d]?.lunch||p.skippedMeals?.[d]?.lunch||!row)continue;
    const replacement=N.deliReplacement[row.lunch];if(replacement)row.lunch=replacement;
   }
-  m.deliRevision=2;m.updatedAt=new Date().toISOString();unsaved=true;
+  m.deliRevision=3;m.updatedAt=new Date().toISOString();unsaved=true;
  }
  return m;
 }
