@@ -147,7 +147,7 @@ function stock(s,day=today()){
 function recordMeal(s,d,k,checked,meal){
  const p=data(s),id=d+'|'+k;
  if(!checked){delete p.consumed[id];return}
- if(p.consumed[id]||meal?.direct)return;
+ if(p.consumed[id])return;
  const items=normalizeParts(meal,servings(s,d,k));
  if(items.length)p.consumed[id]={day:d,at:new Date().toISOString(),items};
 }
@@ -157,17 +157,17 @@ function pendingKinds(s,d,meals){
 }
 function futureNeed(s,d,id,limit=2){
  let sum=0,dates=[];
- for(let n=1;n<=limit;n++){const x=add(d,n),m=window.SistemaLifePlan?.getFood?.(s,x);if(!m)continue;let q=0;for(const k of pendingKinds(s,x,m)){if(m[k]?.direct)continue;for(const [a,v] of normalizeParts(m[k],servings(s,x,k)))if(a===id)q+=v}if(q){sum+=q;dates.push({day:x,qty:q})}}
+ for(let n=1;n<=limit;n++){const x=add(d,n),m=window.SistemaLifePlan?.getFood?.(s,x);if(!m)continue;let q=0;for(const k of pendingKinds(s,x,m)){for(const [a,v] of normalizeParts(m[k],servings(s,x,k)))if(a===id)q+=v}if(q){sum+=q;dates.push({day:x,qty:q})}}
  return {sum,dates};
 }
 function shoppingRows(s,d,meals,ids){
- const p=data(s),have=stock(s,d),need={},direct=[],rows=[];
+ const p=data(s),have=stock(s,d),need={},direct=[],byDirect={},rows=[];
  for(const k of ids){
   const m=meals[k];if(!m)continue;const mult=servings(s,d,k);
   if(!Array.isArray(m.parts)){for(const label of m.shop||[])if(label&&!label.startsWith('ingredienti solo'))direct.push(label);continue}
   for(const [id,n] of m.parts){
    const a=F[id];if(!a)continue;const q=n*mult;
-   if(m.direct||!track(id)){direct.push((m.direct?'Banco / reparto: ':'')+a.name+' · '+qty(id,q));continue}
+   if(!track(id)){const x=byDirect[id]||(byDirect[id]={qty:0,bank:false});x.qty+=q;x.bank=x.bank||!!m.direct;continue}
    need[id]=(need[id]||0)+q;
   }
  }
@@ -183,6 +183,7 @@ function shoppingRows(s,d,meals,ids){
   let label=base,i=1;while(rows.some(x=>x.label===label))label=base+' (integrazione '+(i++)+')';
   rows.push({label,id,qty:amount,checked:false});
  }
+ for(const [id,x] of Object.entries(byDirect))direct.push((x.bank?'Banco / reparto: ':'')+F[id].name+' · '+qty(id,x.qty));
  return [...rows,...[...new Set(direct)].map(label=>({label,checked:false}))];
 }
 function shoppingItems(s,d,meals,ids){return shoppingRows(s,d,meals,ids).map(x=>x.label)}
@@ -222,8 +223,50 @@ function pantryPanel(s,d){
  return '<div class="np-pantry"><h3>Dispensa e riuso</h3><p class="mp-muted">La spunta della spesa registra una quantità acquistata stimata. Quando segni un pasto, sottraggo le dosi previste. Correggi le scorte reali, soprattutto se hai cucinato per più persone o cambiato porzioni.</p>'+(rows||'<p class="mp-muted">Nessuna scorta confermata. Registra gli acquisti o le quantità che hai già.</p>')+'<form data-np-stock class="mp-fields"><label>Prodotto<select name="id">'+opts+'</select></label><label>Quantità realmente disponibile (g o pezzi)<input name="qty" type="number" min="0" max="20000" step="0.1" required></label><label>Data entro cui ricontrollare / usare<input type="date" name="until" min="'+d+'" value="'+add(d,1)+'" required></label><button class="btn secondary full" type="submit">Imposta scorta reale</button></form><small class="mp-muted">0 azzera la scorta. I tempi sono promemoria prudenziali, non certificazioni di sicurezza; prevalgono etichetta, scadenza e conservazione. Congela porzioni adatte. Raffredda gli avanzi cotti e refrigerali entro 2 ore, consumali entro 48 ore o congelali; il riso cotto entro 24 ore.</small></div>';
 }
 function attach(s,persist,render,toast){
- document.querySelectorAll('[data-np-stock]').forEach(form=>{if(form.dataset.npBound)return;form.dataset.npBound='1';form.addEventListener('submit',e=>{e.preventDefault();const v=new FormData(form);try{setStock(s,String(v.get('id')),Number(v.get('qty')),String(v.get('until')));persist();render();toast('Scorta aggiornata.')}catch(err){toast(err.message)}})});
+ document.querySelectorAll('[data-np-stock]').forEach(form=>{if(form.dataset.npBound)return;form.dataset.npBound='1';form.addEventListener('submit',e=>{e.preventDefault();const v=new FormData(form);try{setStock(s,String(v.get('id')),Number(v.get('qty')),String(v.get('until')));window.SistemaMonthPlan?.mealChanged?.(s,today(),'stock');persist();render();toast('Scorta aggiornata.')}catch(err){toast(err.message)}})});
 }
+
+/* Adapt only future, unlocked meals when confirmed stock would otherwise remain unused.
+   This is a planning aid, never an assertion that food is safe to eat. */
+function rebalance(s,m,first,lookup,obs){
+ const have=stock(s,first);
+ const perish=['potato','carrot','zucchini','tomato','spinach','greenbeans','cod'];
+ const items=perish.filter(id=>have[id]?.qty>0).map(id=>({id,q:have[id].qty,until:have[id].until<add(first,4)?have[id].until:add(first,4),weight:['potato','carrot','zucchini','tomato'].includes(id)?3:1.2}));
+ if(!items.length)return false;
+ const slots=[];
+ for(let i=0;i<=4;i++){
+  const d=add(first,i),row=m.entries?.[d];if(!row)continue;
+  for(const k of ['lunch','dinner']){
+   if(s.lifePlan?.meals?.[d]?.[k]||s.lifePlan?.skippedMeals?.[d]?.[k])continue;
+   if(i===0&&k==='lunch'&&work(s,d)&&new Date().getHours()>=18)continue;
+   const recipe=lookup(s,row[k]);
+   if(recipe)slots.push({d,k,recipe,mult:servings(s,d,k),canChange:i>0&&!m.locked?.[d]?.[k]&&!recipe.direct&&!(k==='dinner'&&row[k]==='friday_pizza')});
+  }
+ }
+ const quality=(slot,newRecipe)=>{
+  let score=0;
+  for(const x of items){
+   let used=0;
+   for(const z of slots)if(z.d<=x.until){const r=z===slot?newRecipe:z.recipe;for(const [id,q] of normalizeParts(r,z.mult))if(id===x.id)used+=q}
+   score+=x.weight*Math.min(x.q,used)/x.q;
+  }
+  return score;
+ };
+ const base=quality(null,null);let best=null;
+ for(const z of slots.filter(x=>x.canChange)){
+  for(const r of pool(s,z.d,z.k)){
+   if(r.id===z.recipe.id||r.direct)continue;
+   const seen=obs?.stats?.[r.id];if(seen?.count>=2&&seen.sum/seen.count<3)continue;
+   if(slots.some(x=>x!==z&&x.k===z.k&&x.recipe.id===r.id&&(x.d===add(z.d,1)||x.d===add(z.d,-1))))continue;
+   const gain=quality(z,r)-base;
+   if(gain>.15&&(!best||gain>best.gain+.00001))best={z,r,gain};
+  }
+ }
+ if(!best)return false;
+ m.entries[best.z.d][best.z.k]=best.r.id;
+ return true;
+}
+
 function alternative(s,d,k,old,obs){
  const base=byId[old],available=stock(s,d),options=pool(s,d,k).filter(x=>x.id!==old);
  const score=r=>{let v=r.group&&r.group===base?.group?10:0;
@@ -234,5 +277,5 @@ function alternative(s,d,k,old,obs){
 }
 const css='.np-macros{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:4px 0}.np-macros span{display:grid;gap:3px;border:1px solid #738cc34a;background:#162946;padding:9px;border-radius:9px;color:#b9d5ed;font-size:11px}.np-macros b{font-size:16px;color:#e8f5ff}.np-pantry,.np-reuse{display:grid;gap:8px;border:1px solid #7ba8c84d;border-radius:12px;padding:12px;background:#132b3d}.np-pantry h3{margin:0;font-size:15px}.np-stockrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #7387a43b}.np-stockrow span{min-width:0;display:grid;gap:2px}.np-stockrow small,.np-reuse small{color:#b0c6da;font-size:11px}.np-stockrow strong{white-space:nowrap;color:#a8e6d6}.np-reuse p{margin:0;font-size:12px}.np-day .mp-sectionbody{border-top:0}';
 if(typeof document!=='undefined'){const st=document.createElement('style');st.textContent=css;document.head.appendChild(st)}
-window.SistemaNutrition={recipes,byId,F,preferred,pool,snackFor,servings,macro,macroHTML,dayPanel,reuseHTML,shoppingItems,shoppingRows,togglePurchase,recordMeal,stock,setStock,pantryPanel,attach,alternative,index};
+window.SistemaNutrition={recipes,byId,F,preferred,pool,snackFor,servings,macro,macroHTML,dayPanel,reuseHTML,shoppingItems,shoppingRows,togglePurchase,recordMeal,stock,setStock,pantryPanel,attach,alternative,rebalance,index};
 })();
