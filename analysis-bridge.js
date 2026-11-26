@@ -51,14 +51,14 @@ function snapshot(state,sensitive){
    const meal=window.SistemaLifePlan?.getFood?.(state,date)?.[kind]||{};
    const status=life.meals?.[date]?.[kind]?'mangiato':life.skippedMeals?.[date]?.[kind]?'saltato':'non_registrato';
    const stars=life.mealReviews?.[date]?.[kind]?.stars||null;
-   if(status!=='non_registrato'||stars)record.meals[kind]={name:meal.name||'',ingredients:meal.ingredients||'',status,stars};
+   if(status!=='non_registrato'||stars)record.meals[kind]={name:meal.name||'',ingredients:meal.ingredients||'',status,stars,plannedMacros:meal.macros||null};
   }
   if(Object.keys(record.meals).length)entries.push(record);
  }
  const future=[];
  for(let d=0;d<30;d++){
   const date=offset(d),food=window.SistemaLifePlan?.getFood?.(state,date)||{};
-  future.push({date,items:Object.fromEntries(mealTypes.map(k=>[k,{name:food[k]?.name||'',ingredients:food[k]?.ingredients||''}]))});
+  future.push({date,items:Object.fromEntries(mealTypes.map(k=>[k,{name:food[k]?.name||'',ingredients:food[k]?.ingredients||'',macros:food[k]?.macros||null}]))});
  }
  const completed=[];
  for(let d=-29;d<=0;d++){
@@ -190,7 +190,7 @@ function show(s){status=s;document.querySelectorAll('[data-live-sync-status]').f
 async function auth(){const a=await window.cloudSync?.ensureAuthClient?.();if(!a?.client||!a?.user)throw Error('Accedi al tuo account cloud.');return a}
 function schedule(ms=900){clearTimeout(timer);timer=setTimeout(()=>sync(),ms)}
 function attach(){for(const [sel,fn] of [['[data-live-sync-enable]',enable],['[data-live-sync-now]',()=>sync(true)],['[data-live-sync-stop]',disable]])document.querySelectorAll(sel).forEach(b=>{if(!b.dataset.syncBound){b.dataset.syncBound='1';b.addEventListener('click',fn)}})}
-function makeSnapshot(s){const v=window.SistemaAnalysisBridge.snapshot(s,true);v.sourceUpdatedAt=s.updatedAt||null;v.fitness.recoveryDays=Object.keys(s.lifePlan?.recoveryDays||{}).filter(d=>s.lifePlan.recoveryDays[d]);v.questHistory=Object.fromEntries(Object.entries(s.completions||{}).sort(([a],[b])=>b.localeCompare(a)).slice(0,30).map(([d,qs])=>[d,Object.keys(qs||{}).filter(k=>qs[k])]));return v}
+function makeSnapshot(s){const v=window.SistemaAnalysisBridge.snapshot(s,true);v.nutritionVersion=s.lifePlan?.monthMenu?.nutritionVersion||0;if(window.SistemaNutrition&&s.lifePlan?.settings?.activated){const available=window.SistemaNutrition.stock(s);v.pantry=Object.entries(available).map(([id,x])=>({ingredient:window.SistemaNutrition.F[id]?.name||id,quantity:x.qty,unit:window.SistemaNutrition.F[id]?.unit||'',reviewBy:x.until}));}v.sourceUpdatedAt=s.updatedAt||null;v.fitness.recoveryDays=Object.keys(s.lifePlan?.recoveryDays||{}).filter(d=>s.lifePlan.recoveryDays[d]);v.questHistory=Object.fromEntries(Object.entries(s.completions||{}).sort(([a],[b])=>b.localeCompare(a)).slice(0,30).map(([d,qs])=>[d,Object.keys(qs||{}).filter(k=>qs[k])]));return v}
 function applyCommand(s,p){if(!p||p.type!=='meal_done'||!/^\d{4}-\d{2}-\d{2}$/.test(p.date)||!['snack1','snack2','lunch','dinner'].includes(p.kind)||p.date>new Date().toLocaleDateString('sv-SE'))throw Error('Comando non supportato');if(s.lifePlan?.meals?.[p.date]?.[p.kind]&&!s.lifePlan?.skippedMeals?.[p.date]?.[p.kind])return false;window.SistemaLifePlan.setMealStatus(s,p.date,p.kind,true);return true}
 async function sync(force=false){if(!ctx||running||revoking||!navigator.onLine)return;running=true;try{const {client,user}=await auth();const s=ctx.get();if(!s?.profile)return;const {data:row,error:readError}=await client.from('sistema_live_sync').select('enabled,updated_at,source_updated_at').eq('user_id',user.id).maybeSingle();if(readError)throw readError;enabled=!!row?.enabled;owner=user.id;if(!enabled){show('Sincronizzazione continua non attiva.');return}
 const {data:commands,error:ce}=await client.from('sistema_sync_commands').select('id,payload').eq('user_id',user.id).eq('status','pending').order('created_at',{ascending:true}).limit(30);if(ce)throw ce;
