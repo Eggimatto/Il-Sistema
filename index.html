@@ -309,6 +309,23 @@ function report(state,period=30){if(!enabled(state))return [];
  const rituals=Object.entries(state.completions||{}).filter(([d,v])=>daysSince(d)>=0&&daysSince(d)<period&&v?.sonno_rituale).length;
  return ['', '## Piano operativo personale (dati scelti dal giocatore)',`- Giorni con almeno un pasto o spuntino registrato: ${days}`,`- Sedute di forza completate: ${strength}`,`- Rituali serali completati: ${rituals}`,'- Il piano è adattato al ritmo notturno e agli orari configurati localmente. Le assenze non sono considerate fallimenti.','- Le indicazioni non sostituiscono una valutazione nutrizionale o medica.'];
 }
+function setMealStatus(state,day,id,checked){
+  const plan=lp(state);plan.meals[day]=plan.meals[day]||{};
+  if(checked)plan.meals[day][id]=true;else delete plan.meals[day][id];
+  if(checked&&plan.skippedMeals?.[day])delete plan.skippedMeals[day][id];
+  if(!checked&&plan.mealReviews?.[day])delete plan.mealReviews[day][id];
+  if((id==='lunch'||id==='dinner')&&window.SistemaMonthPlan?.enabled?.(state))window.SistemaMonthPlan.mealChanged(state,day,id);
+  state.completions[day]=state.completions[day]||{};plan.autoClaims[day]=plan.autoClaims[day]||{};
+  const map={snack1:'life_snack',snack2:'life_snack_2',lunch:'life_lunch',dinner:'life_dinner'};
+  const cid=map[id],should=!!plan.meals[day][id];
+  if(should&&!state.completions[day][cid]){state.completions[day][cid]=new Date().toISOString();plan.autoClaims[day][cid]=true}
+  else if(!should&&plan.autoClaims[day][cid]){delete state.completions[day][cid];delete plan.autoClaims[day][cid]}
+  const two=Object.values(plan.meals[day]).filter(Boolean).length>=2;
+  if(two&&!state.completions[day].sistema_pasti_v1&&state.customQuests.some(x=>x.id==='sistema_pasti_v1'&&!x.archived)){
+   state.completions[day].sistema_pasti_v1=new Date().toISOString();plan.autoClaims[day].sistema_pasti_v1=true;
+  }else if(!two&&plan.autoClaims[day].sistema_pasti_v1){delete state.completions[day].sistema_pasti_v1;delete plan.autoClaims[day].sistema_pasti_v1}
+  return !!plan.meals[day][id];
+}
 function attach(state,persist,renderApp,toast){
  document.querySelectorAll('[data-life-goto]').forEach(el=>el.addEventListener('click',()=>{const key=el.dataset.lifeGoto;const nav=document.querySelector(`.mobilebar [data-view="${key}"]`)||document.querySelector(`.nav [data-view="${key}"]`);if(nav)nav.click();}));
  const morning=document.getElementById('lifeMorningForm');
@@ -323,20 +340,7 @@ function attach(state,persist,renderApp,toast){
  });
  document.getElementById('lifeScheduleForm')?.addEventListener('submit',e=>{e.preventDefault();const f=new FormData(e.currentTarget);const s=lp(state).settings;if(!s)return;for(const [k,o,v] of [['wakeWork','work','wakeWork'],['wakeOff','work','wakeOff'],['lunch','food','lunch'],['dinner','food','dinner']]){const val=f.get(k);if(validClock(val))s[o][v]=val;}persist();renderApp();toast('Orari aggiornati e salvati localmente.');});
  document.querySelectorAll('[data-life-meal]').forEach(el=>el.addEventListener('change',()=>{
-  const plan=lp(state),day=el.dataset.lifeDay,id=el.dataset.lifeMeal;plan.meals[day]=plan.meals[day]||{};
-  if(el.checked)plan.meals[day][id]=true;else delete plan.meals[day][id];
-  if(el.checked&&plan.skippedMeals?.[day])delete plan.skippedMeals[day][id];
-  if(!el.checked&&plan.mealReviews?.[day])delete plan.mealReviews[day][id];
-  if((id==='lunch'||id==='dinner')&&window.SistemaMonthPlan?.enabled?.(state))window.SistemaMonthPlan.mealChanged(state,day,id);
-  state.completions[day]=state.completions[day]||{};plan.autoClaims[day]=plan.autoClaims[day]||{};
-  const map={snack1:'life_snack',snack2:'life_snack_2',lunch:'life_lunch',dinner:'life_dinner'};
-  const cid=map[id],should=!!plan.meals[day][id];
-  if(should&&!state.completions[day][cid]){state.completions[day][cid]=new Date().toISOString();plan.autoClaims[day][cid]=true}
-  else if(!should&&plan.autoClaims[day][cid]){delete state.completions[day][cid];delete plan.autoClaims[day][cid]}
-  const two=Object.values(plan.meals[day]).filter(Boolean).length>=2;
-  if(two&&!state.completions[day].sistema_pasti_v1&&state.customQuests.some(x=>x.id==='sistema_pasti_v1'&&!x.archived)){
-   state.completions[day].sistema_pasti_v1=new Date().toISOString();plan.autoClaims[day].sistema_pasti_v1=true;
-  }else if(!two&&plan.autoClaims[day].sistema_pasti_v1){delete state.completions[day].sistema_pasti_v1;delete plan.autoClaims[day].sistema_pasti_v1}
+  setMealStatus(state,el.dataset.lifeDay,el.dataset.lifeMeal,el.checked);
   persist();renderApp();toast('Pasto registrato nel piano.');
  }));
  document.querySelectorAll('details.life-shop').forEach(el=>el.addEventListener('toggle',()=>{shopOpen=el.open}));
@@ -375,7 +379,7 @@ const css=`
 @media(max-width:390px){.life-checkin{padding:13px!important}.life-checkhead{gap:8px}.life-checkhead h2{font-size:16px}.life-reward{font-size:10px}.life-field input,.life-field select{font-size:13px}}
 .life-panel,.life-hero{border-color:rgba(110,160,240,.35)!important;background:linear-gradient(150deg,#111e35,#0e192d)!important}.life-panel h2,.life-hero h2{font-size:19px;margin:5px 0 12px}.life-muted{color:#b3c6dd;font-size:12px;line-height:1.6}.life-good,.life-warning{padding:12px 13px;border-radius:10px;font-size:12px;line-height:1.6;margin:12px 0}.life-good{border:1px solid rgba(116,220,169,.3);background:rgba(44,99,83,.22);color:#ccf5dc}.life-warning{border:1px solid rgba(230,177,102,.42);background:rgba(110,79,43,.18);color:#ffe0ab}.life-slots{display:grid;gap:0;margin:14px 0;border:1px solid rgba(115,151,224,.21);border-radius:12px;overflow:hidden}.life-slot{display:flex;gap:13px;padding:11px 12px;align-items:flex-start;border-bottom:1px solid rgba(115,151,224,.16);background:rgba(20,35,61,.53)}.life-slot:last-child{border-bottom:none}.life-slot strong{display:block;font-size:12px;color:#ecf5ff}.life-slot p{font-size:11px;color:#a8bcdb;margin:2px 0 0;line-height:1.5}.life-time{font-size:11px;color:#72c9fc;min-width:55px;font-weight:900}.life-details,.life-shop{border:1px solid rgba(140,171,235,.25);border-radius:12px;padding:9px 13px;margin:11px 0;background:rgba(21,36,62,.76)}.life-details summary,.life-shop summary{cursor:pointer;font-size:13px;font-weight:800;min-height:40px;display:flex;align-items:center;justify-content:space-between;gap:9px}.life-details p,.life-shop p{font-size:12px;color:#b7c8e5;line-height:1.6}.life-exercises{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}.life-exercises>div{background:#1a3050;border:1px solid rgba(126,176,238,.15);border-radius:10px;padding:11px}.life-exercises strong,.life-exercises span,.life-exercises small{display:block}.life-exercises strong{font-size:12px}.life-exercises span{font-size:12px;color:#86ddff;font-weight:850;margin:5px 0}.life-exercises small{font-size:11px;color:#b2c4dc;line-height:1.5}.life-mealgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:13px 0}.life-meal{display:flex;align-items:flex-start;gap:10px;border:1px solid rgba(116,163,231,.28);border-radius:13px;padding:13px;background:#162440;cursor:pointer;min-width:0}.life-meal input,.life-buy input{width:22px;height:22px;min-width:22px;accent-color:#6ee0cb;margin:2px 0 0}.life-meal strong{display:block;font-size:13px;margin:6px 0}.life-meal p{color:#e0ecfe;font-size:12px;line-height:1.5;margin:4px 0}.life-meal span{font-size:11px;color:#b5c9e0;line-height:1.6}.life-mealsmall{font-size:10px;color:#86bdfd;font-weight:850;letter-spacing:.04em}.life-done{background:rgba(47,101,87,.22)!important;border-color:rgba(91,199,152,.5)!important}.life-buy{display:flex;align-items:center;gap:10px;padding:8px 3px;border-top:1px solid rgba(140,170,230,.16);min-height:44px;font-size:12px}.life-buy span{flex:1}.life-shop .btn{margin:10px 0 0}.life-config{margin:14px 0}.life-config h3{font-size:13px}.life-editgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}.life-editgrid label{display:flex;flex-direction:column;font-size:11px;color:#c1d7ea;gap:5px}.life-editgrid input{width:100%;height:43px;border-radius:8px;background:#1a2c4b;border:1px solid #455b7b;color:white;padding:8px}@media(max-width:700px){.life-mealgrid,.life-exercises{grid-template-columns:1fr}.life-panel{padding:14px!important}.life-slot{padding:10px}.life-meal{padding:12px}.life-editgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}`;
 if(typeof document!=='undefined'&&!document.getElementById('life-style')){const style=document.createElement('style');style.id='life-style';style.textContent=css;document.head.appendChild(style)}
-window.SistemaLifePlan={enabled,lp,normalise,importPrivateFile,getQuests,allQuests,renderToday,renderMorningCheckin,renderEveningCheckin,renderFood,renderDungeon,renderArchive,renderDashboard,report,attach,training,trainingDay,fatigue,getToday,getFood,shoppingList,sleepAdvice};
+window.SistemaLifePlan={setMealStatus,enabled,lp,normalise,importPrivateFile,getQuests,allQuests,renderToday,renderMorningCheckin,renderEveningCheckin,renderFood,renderDungeon,renderArchive,renderDashboard,report,attach,training,trainingDay,fatigue,getToday,getFood,shoppingList,sleepAdvice};
 })();
 
 </script>
@@ -449,7 +453,7 @@ function ensurePersonalDungeons(){
 }
 function migrateState(old){if(!old||![1,2,3].includes(Number(old.version))||!old.logs||!old.completions||!Array.isArray(old.goals)||!Array.isArray(old.customQuests))return null;return {...old,version:3,weeklyPlans:old.weeklyPlans&&typeof old.weeklyPlans==='object'&&!Array.isArray(old.weeklyPlans)?old.weeklyPlans:{},weeklyClaims:old.weeklyClaims&&typeof old.weeklyClaims==='object'&&!Array.isArray(old.weeklyClaims)?old.weeklyClaims:{},dungeonClaims:old.dungeonClaims&&typeof old.dungeonClaims==='object'&&!Array.isArray(old.dungeonClaims)?old.dungeonClaims:{},personalPrograms:old.personalPrograms&&typeof old.personalPrograms==='object'&&!Array.isArray(old.personalPrograms)?old.personalPrograms:{},foodPlan:old.foodPlan&&typeof old.foodPlan==='object'&&!Array.isArray(old.foodPlan)?old.foodPlan:{shopping:{},meals:{},autoClaims:{}},lifePlan:old.lifePlan&&typeof old.lifePlan==='object'&&!Array.isArray(old.lifePlan)?old.lifePlan:{settings:null,meals:{},shopping:{},autoClaims:{}}}}
 function loadState(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return defaultState();return migrateState(JSON.parse(raw))||defaultState()}catch(e){return defaultState()}}
-function persist(){state.updatedAt=new Date().toISOString();try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));window.cloudSync?.notifyPersist?.()}catch(e){toast('Memoria locale piena. Esporta un backup.')}}
+function persist(){state.updatedAt=new Date().toISOString();try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));window.SistemaLiveSync?.notifyPersist?.();window.cloudSync?.notifyPersist?.();return true}catch(e){toast('Memoria locale piena. Esporta un backup.');return false}}
 function dateKey(d){const yr=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${yr}-${m}-${day}`}
 function daysBefore(n){let d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()-n);return dateKey(d)}
 function formatDate(k,long=false){try{return new Date(k+'T12:00:00').toLocaleDateString('it-IT',long?{weekday:'long',day:'numeric',month:'long',year:'numeric'}:{day:'2-digit',month:'short'})}catch(e){return k}}
@@ -732,6 +736,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.sist
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
 render();
 window.cloudSync?.connect?.();
+window.SistemaLiveSync?.start?.(()=>state,persist,render,toast);
 // Clicking an Android notification opens today's quests or scrolls to the shopping list.
 window.addEventListener('message',event=>{
  const data=event.data;
