@@ -99,7 +99,7 @@ const getDish=(state,id)=>BY_ID[id]||data(state).customMeals[id]||PIZZA;
 function pool(state,date,kind){
  const day=dow(date);
  if(kind==='dinner'&&day===(Number.isInteger(state.lifePlan?.settings?.food?.pizzaDay)?state.lifePlan.settings.food.pizzaDay:5))return [PIZZA];
- if(N){const source=N.pool(state,date,kind);const category=source[0]?.category;return [...source,...Object.values(data(state).customMeals).filter(x=>x.category===category&&!String(x.id).startsWith('manual_'))]}
+ if(N){const source=N.pool(state,date,kind);const category=source[0]?.category;return [...source,...Object.values(data(state).customMeals).filter(x=>x.category===category&&!String(x.id).startsWith('manual_')&&!(category==='deli'&&/mozzarella/i.test([x.name,x.ingredients,...(x.shop||[])].join(' '))))]}
 
  const dayNumber=Math.floor(new Date(date+'T12:00:00').getTime()/86400000);
  const source=kind==='lunch'?(day>=1&&day<=5?DELI:SHARED):(dayNumber%3===0?VARIANTS:DINNERS);
@@ -181,6 +181,14 @@ function ensure(state){
   for(const k of ['snack1','snack2'])if(p.meals?.[current]?.[k]||p.skippedMeals?.[current]?.[k])m.legacySnack[k]=true;
   for(const [d,row] of Object.entries(m.entries))if(d>=current&&!p.meals?.[d]?.lunch&&!p.skippedMeals?.[d]?.lunch&&String(row.lunch||'').startsWith('deli_')&&m.locked?.[d])delete m.locked[d].lunch;
   m.anchor=current;build(state,current,true);unsaved=true;
+ }
+ // Revise only unconsumed planned deli recipes. Preserve historical IDs, ratings and manual edits.
+ if(N?.deliReplacement&&m.deliRevision!==2){
+  for(const [d,row] of Object.entries(m.entries||{})){
+   if(d<current||p.meals?.[d]?.lunch||p.skippedMeals?.[d]?.lunch||!row)continue;
+   const replacement=N.deliReplacement[row.lunch];if(replacement)row.lunch=replacement;
+  }
+  m.deliRevision=2;m.updatedAt=new Date().toISOString();unsaved=true;
  }
  return m;
 }
