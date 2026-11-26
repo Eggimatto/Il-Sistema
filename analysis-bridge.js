@@ -10,7 +10,7 @@ const validDay=x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x)&&!isNaN(Dat
 const mealTypes=['snack1','lunch','snack2','dinner'];
 let textStatus='Non hai condiviso alcun riepilogo in questa sessione.',code='',expires='',pending=[],busy=false,seen=false;
 function panelHTML(){
- return '<section class="panel ab-panel" id="analysis-bridge"><div class="panelhead"><div>'+
+ return (window.SistemaLiveSync?.panel?.()||'')+'<section class="panel ab-panel" id="analysis-bridge"><div class="panelhead"><div>'+
  '<div class="eyebrow">COLLEGAMENTO PRIVATO · FACOLTATIVO</div><h2>🧠 Analisi e piani con ChatGPT</h2></div><span class="pill">Controllo tuo</span></div>'+
  '<p class="muted small">Posso analizzare cosa hai davvero mangiato, i voti dei piatti e gli allenamenti. Puoi poi ricevere <b>proposte di menu o schede</b> e approvarle nell’app. Nessuna modifica viene applicata senza il tuo consenso.</p>'+
  '<div class="ab-explain"><strong>Come funziona</strong><p>1. Premi «Condividi per analisi». 2. Copia il codice e scrivimelo qui. 3. Io potrò leggere il riepilogo tramite il tuo progetto Supabase collegato, fare analisi e preparare eventuali modifiche. 4. Nell’app approvi o rifiuti le proposte.</p></div>'+
@@ -166,6 +166,7 @@ async function resolveProposal(state,proposalId,accepted,persist,render,toast){
  finally{busy=false}
 }
 function attach(state,persist,render,toast){
+ window.SistemaLiveSync?.attach?.();
  document.querySelectorAll('[data-ab-share]').forEach(b=>b.addEventListener('click',()=>share(state)));
  document.querySelectorAll('[data-ab-revoke]').forEach(b=>b.addEventListener('click',revoke));
  document.querySelectorAll('[data-ab-proposals]').forEach(b=>b.addEventListener('click',loadProposals));
@@ -178,4 +179,29 @@ function attach(state,persist,render,toast){
  }));
 }
 window.SistemaAnalysisBridge={panelHTML,attach,snapshot,applyPlan};
+})();
+/* Private continuous sync, independent of the encrypted backup. */
+(()=>{
+'use strict';
+let ctx=null,running=false,timer=null,enabled=false,owner=null,last='',status='Verifica collegamento…',revoking=false;
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function panel(){return '<section class="panel"><div class="panelhead"><h2>Sincronizzazione con ChatGPT</h2></div><p class="muted small">Invia automaticamente al tuo Supabase privato il riepilogo di pasti, allenamenti, sonno, peso, energia e umore, leggibile dagli amministratori autorizzati. Le correzioni richieste in chat vengono ricevute quando apri l’app. Il backup cifrato rimane separato.</p><p data-live-sync-status>'+esc(status)+'</p><div class="dataactions"><button class="btn" data-live-sync-enable>Attiva sincronizzazione continua</button><button class="btn secondary" data-live-sync-now>Sincronizza ora</button><button class="btn secondary" data-live-sync-stop>Disattiva ed elimina riepilogo</button></div></section>'}
+function show(s){status=s;document.querySelectorAll('[data-live-sync-status]').forEach(x=>x.textContent=s)}
+async function auth(){const a=await window.cloudSync?.ensureAuthClient?.();if(!a?.client||!a?.user)throw Error('Accedi al tuo account cloud.');return a}
+function schedule(ms=900){clearTimeout(timer);timer=setTimeout(()=>sync(),ms)}
+function attach(){for(const [sel,fn] of [['[data-live-sync-enable]',enable],['[data-live-sync-now]',()=>sync(true)],['[data-live-sync-stop]',disable]])document.querySelectorAll(sel).forEach(b=>{if(!b.dataset.syncBound){b.dataset.syncBound='1';b.addEventListener('click',fn)}})}
+function makeSnapshot(s){const v=window.SistemaAnalysisBridge.snapshot(s,true);v.sourceUpdatedAt=s.updatedAt||null;v.fitness.recoveryDays=Object.keys(s.lifePlan?.recoveryDays||{}).filter(d=>s.lifePlan.recoveryDays[d]);v.questHistory=Object.fromEntries(Object.entries(s.completions||{}).sort(([a],[b])=>b.localeCompare(a)).slice(0,30).map(([d,qs])=>[d,Object.keys(qs||{}).filter(k=>qs[k])]));return v}
+function applyCommand(s,p){if(!p||p.type!=='meal_done'||!/^\d{4}-\d{2}-\d{2}$/.test(p.date)||!['snack1','snack2','lunch','dinner'].includes(p.kind)||p.date>new Date().toLocaleDateString('sv-SE'))throw Error('Comando non supportato');if(s.lifePlan?.meals?.[p.date]?.[p.kind]&&!s.lifePlan?.skippedMeals?.[p.date]?.[p.kind])return false;window.SistemaLifePlan.setMealStatus(s,p.date,p.kind,true);return true}
+async function sync(force=false){if(!ctx||running||revoking||!navigator.onLine)return;running=true;try{const {client,user}=await auth();const s=ctx.get();if(!s?.profile)return;const {data:row,error:readError}=await client.from('sistema_live_sync').select('enabled,updated_at,source_updated_at').eq('user_id',user.id).maybeSingle();if(readError)throw readError;enabled=!!row?.enabled;owner=user.id;if(!enabled){show('Sincronizzazione continua non attiva.');return}
+const {data:commands,error:ce}=await client.from('sistema_sync_commands').select('id,payload').eq('user_id',user.id).eq('status','pending').order('created_at',{ascending:true}).limit(30);if(ce)throw ce;
+let changed=false;const ack=[];for(const c of commands||[]){try{changed=applyCommand(s,c.payload)||changed;ack.push(c.id)}catch(e){console.warn('Comando non applicato',e.message)}}
+if(changed){if(ctx.persist()===false)throw Error('Salvataggio locale non riuscito');ctx.render();ctx.toast('Correzioni ricevute dal Sistema.')}
+const key=user.id+'|'+(s.updatedAt||'')+'|'+new Date().toLocaleDateString('sv-SE');
+if(force||changed||last!==key||!row.updated_at){const snap=makeSnapshot(s);const {data,error}=await client.from('sistema_live_sync').update({snapshot:snap,source_updated_at:s.updatedAt||null,updated_at:new Date().toISOString()}).eq('user_id',user.id).eq('enabled',true).select('updated_at');if(error)throw error;if(!data?.length)throw Error('Sincronizzazione disattivata');last=key;show('Ultima sincronizzazione: '+new Date(data[0].updated_at).toLocaleString('it-IT'))}else show('Ultima sincronizzazione: '+new Date(row.updated_at).toLocaleString('it-IT'));
+if(ack.length){const {error}=await client.from('sistema_sync_commands').update({status:'applied',applied_at:new Date().toISOString()}).eq('user_id',user.id).eq('status','pending').in('id',ack);if(error)throw error}
+}catch(e){show('Sincronizzazione: '+e.message)}finally{running=false}}
+async function enable(){if(running||revoking)return;if(!confirm('Attivare la sincronizzazione continua dei dati personali, inclusi sonno, peso, energia e umore, verso il tuo Supabase privato? Puoi disattivarla in qualsiasi momento.'))return;try{const {client,user}=await auth();const {error}=await client.from('sistema_live_sync').upsert({user_id:user.id,enabled:true},{onConflict:'user_id'});if(error)throw error;enabled=true;last='';await sync(true)}catch(e){show('Attivazione: '+e.message)}}
+async function disable(){if(running||revoking)return;revoking=true;clearTimeout(timer);try{const {client,user}=await auth();const {error}=await client.from('sistema_live_sync').update({enabled:false,snapshot:null,source_updated_at:null,updated_at:null}).eq('user_id',user.id);if(error)throw error;enabled=false;last='';show('Sincronizzazione disattivata; riepilogo eliminato.')}catch(e){show('Disattivazione non riuscita: '+e.message)}finally{revoking=false}}
+function start(get,persist,render,toast){ctx={get,persist,render,toast};attach();schedule(1500);window.addEventListener('online',()=>schedule(100));document.addEventListener('visibilitychange',()=>{if(!document.hidden)schedule(100)});setInterval(()=>{if(!document.hidden)sync()},30000)}
+window.SistemaLiveSync={panel,attach,start,notifyPersist:()=>schedule(),makeSnapshot,applyCommand};
 })();
