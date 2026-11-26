@@ -75,6 +75,7 @@ button{min-width:0}.btn.smallbtn{min-height:41px;padding:9px 13px;font-size:12px
 <script src="cloud.js"></script>
 <script src="food-plan.js"></script>
 <script src="push.js"></script>
+<script src="nutrition-plan.js"></script>
 <script src="month-plan.js"></script>
 <script src="meal-editor.js"></script>
 <script src="analysis-bridge.js"></script>
@@ -218,7 +219,7 @@ function shoppingList(state,day){
  const meals=getFood(state,day),eaten=state.lifePlan?.meals?.[day]||{},skipped=state.lifePlan?.skippedMeals?.[day]||{};
  const today=day===todayKey(),afterOfficeLunch=today&&new Date().getHours()>=18;
  const ids=['snack1','lunch','snack2','dinner'].filter(id=>!eaten[id]&&!skipped[id]&&!(id==='lunch'&&meals.workLunch&&afterOfficeLunch));
- const base=Array.from(new Set(ids.flatMap(id=>meals[id].shop||[]).filter(x=>!x.startsWith('ingredienti solo'))));
+ const base=window.SistemaNutrition?.shoppingItems?.(state,day,meals,ids)||Array.from(new Set(ids.flatMap(id=>meals[id].shop||[]).filter(x=>!x.startsWith('ingredienti solo'))));
  return window.SistemaMealEditor?.mergeShoppingList?.(state,day,base)||base;
 }
 function getQuests(state,day){
@@ -231,7 +232,7 @@ function getQuests(state,day){
    life_snack_2:`${cfg.food.snackTwo} · ${f.snack2.name}`,
    life_lunch:`${cfg.food.lunch} · ${f.lunch.name}${f.workLunch?' (acquista al banco)':''}`,
    life_dinner:`${cfg.food.dinner} · ${f.dinner.name}`,
-   life_shopping:f.workLunch?'Compra il pranzo già pronto al banco e soltanto ciò che manca per cena e spuntini':'Compra solo ciò che manca per oggi o domani'
+   life_shopping:f.workLunch?'Acquista pane, pizza o focaccia con salumi, formaggi o pollo arrosto; compra solo ciò che manca per casa':'Compra solo ciò che manca per oggi o domani'
   };
   return {...q,desc:labels[q.id]};
  });
@@ -294,7 +295,7 @@ function renderDungeon(state,g){if(!enabled(state)||!g?.program)return '';
  const day=todayKey();
  if(g.program==='sleep')return `<p class="life-muted">${esc(sleepAdvice(state,day).message)}</p>`;
  if(g.program==='strength')return `<p class="life-muted">Due sedute iniziali non consecutive a settimana. Apri le quest per la scheda di oggi, con serie e recuperi. Con forte stanchezza, riposa.</p>`;
- if(g.program==='nutrition')return `<p class="life-muted">Dal lunedì al venerdì puoi prendere il pranzo al banco gastronomia, senza cucinare il giorno prima. A casa bastano cene veloci e uno spuntino aggiuntivo, quando possibile.</p>`;
+ if(g.program==='nutrition')return `<p class="life-muted">Dal lunedì al venerdì scegli pane, pizza o focaccia, salumi e formaggi compatibili con le tue tolleranze, oppure pollo arrosto. Non occorrono piatti pronti. A casa bastano cene veloci e uno spuntino aggiuntivo, quando possibile.</p>`;
  return '';
 }
 function renderArchive(state){
@@ -311,6 +312,7 @@ function report(state,period=30){if(!enabled(state))return [];
 }
 function setMealStatus(state,day,id,checked){
   const plan=lp(state);plan.meals[day]=plan.meals[day]||{};
+  if(!checked||!plan.meals[day][id])window.SistemaNutrition?.recordMeal?.(state,day,id,checked,checked?getFood(state,day)?.[id]:null);
   if(checked)plan.meals[day][id]=true;else delete plan.meals[day][id];
   if(checked&&plan.skippedMeals?.[day])delete plan.skippedMeals[day][id];
   if(!checked&&plan.mealReviews?.[day])delete plan.mealReviews[day][id];
@@ -347,6 +349,7 @@ function attach(state,persist,renderApp,toast){
  document.querySelectorAll('[data-life-shop]').forEach(el=>el.addEventListener('change',()=>{shopOpen=true;
   const plan=lp(state),day=el.dataset.lifeDay,id=el.dataset.lifeShop;
   plan.shopping[day]=plan.shopping[day]||{};
+  window.SistemaNutrition?.togglePurchase?.(state,day,id,el.checked);
   if(el.checked)plan.shopping[day][id]=true;else delete plan.shopping[day][id];
   const n=Object.values(plan.shopping[day]).filter(Boolean).length;
   state.completions[day]=state.completions[day]||{};
@@ -364,7 +367,7 @@ function attach(state,persist,renderApp,toast){
   if(!state.completions[day].sonno_rituale){state.completions[day].sonno_rituale=new Date().toISOString();persist();renderApp();toast('Rituale registrato · +20 XP');}
  }));
  document.querySelectorAll('[data-life-copyshop]').forEach(el=>el.addEventListener('click',async()=>{
-  const day=el.dataset.lifeCopyshop,str=`LISTA DELLA SPESA · ${niceDay(day)}\n`+shoppingList(state,day).map(x=>'- '+x).join('\n');
+  const day=el.dataset.lifeCopyshop,str=`LISTA DELLA SPESA · ${niceDay(day)}\n`+shoppingList(state,day).filter(x=>!state.lifePlan?.shopping?.[day]?.[shopKey(x)]).map(x=>'- '+x).join('\n');
   try{await navigator.clipboard.writeText(str);toast('Lista copiata')}catch{window.prompt('Copia la lista:',str)}
  }));
 }
