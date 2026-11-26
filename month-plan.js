@@ -159,6 +159,7 @@ function build(state,anchor,rewrite=false){
    recent.push(row[kind]);
   }
  }
+ N?.rebalance?.(state,m,current,getDish,obs);
  m.updatedAt=new Date().toISOString();
 }
 let unsaved=false;
