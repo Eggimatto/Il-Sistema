@@ -84,7 +84,8 @@ for(const [bi,bing,bname] of BASES)for(const [pi,ping,pname] of PROTEINS)for(con
  'Usa ingredienti gia pronti oppure cuoci bene quelli necessari; assembla e servi caldo. Per il couscous bastano pochi minuti.',
  [bname,pname,vi].join(' + '),[bi,pi,vi],15));
 }
-const LIBRARY=[...DELI,...DINNERS,...SHARED,...VARIANTS,PIZZA];
+const N=window.SistemaNutrition;
+const LIBRARY=[...DELI,...DINNERS,...SHARED,...VARIANTS,PIZZA,...(N?.recipes||[])];
 const BY_ID=Object.fromEntries(LIBRARY.map(x=>[x.id,x]));
 const enabled=state=>!!state?.profile&&!!state?.lifePlan?.settings?.activated;
 const data=state=>{
@@ -97,7 +98,9 @@ const allDishes=state=>[...LIBRARY,...Object.values(data(state).customMeals||{})
 const getDish=(state,id)=>BY_ID[id]||data(state).customMeals[id]||PIZZA;
 function pool(state,date,kind){
  const day=dow(date);
- if(kind==='dinner'&&day===5)return [PIZZA];
+ if(kind==='dinner'&&day===(Number.isInteger(state.lifePlan?.settings?.food?.pizzaDay)?state.lifePlan.settings.food.pizzaDay:5))return [PIZZA];
+ if(N){const source=N.pool(state,date,kind);const category=source[0]?.category;return [...source,...Object.values(data(state).customMeals).filter(x=>x.category===category&&!String(x.id).startsWith('manual_'))]}
+
  const dayNumber=Math.floor(new Date(date+'T12:00:00').getTime()/86400000);
  const source=kind==='lunch'?(day>=1&&day<=5?DELI:SHARED):(dayNumber%3===0?VARIANTS:DINNERS);
  const desired=kind==='lunch'?(day>=1&&day<=5?'deli':'shared'):'dinner';
@@ -152,7 +155,7 @@ function build(state,anchor,rewrite=false){
   for(const kind of ['lunch','dinner']){
    const stored=row[kind],past=date<current,done=!!p.meals?.[date]?.[kind],skipped=!!p.skippedMeals?.[date]?.[kind],locked=!!m.locked?.[date]?.[kind];
    if(stored&&(!rewrite||past||done||skipped||locked)){recent.push(stored);continue;}
-   row[kind]=choose(state,date,kind,recent.slice(-12),obs).id;
+   row[kind]=N?.preferred?.(state,date,kind,obs)||choose(state,date,kind,recent.slice(-12),obs).id;
    recent.push(row[kind]);
   }
  }
@@ -170,6 +173,14 @@ function ensure(state){
   m.entries=m.entries||{};m.locked=m.locked||{};m.anchor=current;
   build(state,current);unsaved=true;
  }
+ // Upgrade in place. Past entries, real meals, skips, and explicit custom edits are preserved.
+ if(N&&m.nutritionVersion!==1){
+  m.entries=m.entries||{};m.locked=m.locked||{};m.legacy=m.legacy||{};m.legacySnapshots=m.legacySnapshots||{};
+  m.nutritionVersion=1;m.nutritionStart=current;m.legacySnack={};
+  for(const k of ['snack1','snack2'])if(p.meals?.[current]?.[k]||p.skippedMeals?.[current]?.[k])m.legacySnack[k]=true;
+  for(const [d,row] of Object.entries(m.entries))if(d>=current&&!p.meals?.[d]?.lunch&&!p.skippedMeals?.[d]?.lunch&&String(row.lunch||'').startsWith('deli_')&&m.locked?.[d])delete m.locked[d].lunch;
+  m.anchor=current;build(state,current,true);unsaved=true;
+ }
  return m;
 }
 function chosen(state,day,kind){const m=ensure(state);return m?.entries?.[day]?.[kind]||pool(state,day,kind)[0]?.id||PIZZA.id;}
@@ -184,7 +195,8 @@ function withMeals(state,day,base){
   m.legacySnapshots=m.legacySnapshots||{};m.legacySnapshots[day]=m.legacySnapshots[day]||{};m.legacySnapshots[day][kind]=true;unsaved=true;
  }
  const l=getDish(state,chosen(state,day,'lunch')),d=getDish(state,chosen(state,day,'dinner'));
- return {...base,...Object.fromEntries(['snack1','snack2'].filter(k=>p.snackOverrides?.[day]?.[k]).map(k=>[k,{...base[k],...p.snackOverrides[day][k],time:base[k].time}])),lunch:{...l,time:base.lunch.time},dinner:{...d,time:base.dinner.time},selection:l.id};
+ const snacks=Object.fromEntries(['snack1','snack2'].map(k=>{const custom=p.snackOverrides?.[day]?.[k];const structured=N&&m.nutritionStart&&day>=m.nutritionStart&&!(day===m.nutritionStart&&m.legacySnack?.[k])?N.snackFor(day,k):null;return [k,{...(custom?{...base[k],...custom}:structured||base[k]),time:base[k].time}]}));
+ return {...base,...snacks,lunch:{...l,time:base.lunch.time},dinner:{...d,time:base.dinner.time},selection:l.id};
 }
 function eaten(state,date,kind){return !!data(state).meals?.[date]?.[kind]}
 function skipped(state,date,kind){return !!data(state).skippedMeals?.[date]?.[kind]}
@@ -259,7 +271,7 @@ function headCard(id,title,sub,status,content){
 function morningForm(state,day){const v=state.logs?.[day]||{};return '<form id="lifeMorningForm" class="mp-form mp-fields"><label>Ore dormite<input name="sleepHours" type="number" min="0.25" max="24" step="0.25" inputmode="decimal" placeholder="Es. 4,5" value="'+H(v.sleepHours??'')+'" required/></label><label>Ora in cui ti sei coricato (facoltativa)<input type="time" name="bedtime" value="'+H(v.bedtime||'')+'"/></label><button class="btn full" type="submit">Salva il sonno</button></form>'}
 function eveningForm(state,day){const v=state.logs?.[day]||{};const input=(k,name)=>'<label>'+name+'<select name="'+k+'" required><option value="">Voto 1-5</option>'+[1,2,3,4,5].map(n=>'<option value="'+n+'" '+(v[k]===n?'selected':'')+'>'+n+' / 5</option>').join('')+'</select></label>';return '<form id="lifeEveningForm" class="mp-form mp-fields"><div class="mp-votes">'+input('mood','Umore')+input('energy','Energia')+input('stress','Stress')+'</div><button class="btn full" type="submit">Salva la giornata</button></form>'}
 function stars(state,date,kind){const current=rating(state,date,kind),isEaten=eaten(state,date,kind);if(!isEaten)return '<small class="mp-muted">Dopo aver mangiato puoi dare da 1 a 5 stelle.</small>';return '<div class="mp-rating"><span>Quanto ti \u00e8 piaciuto?</span><div class="mp-stars" role="group" aria-label="Valutazione da una a cinque stelle">'+[1,2,3,4,5].map(n=>'<button type="button" class="mp-star '+(n<=current?'picked':'')+'" data-mp-rate="'+kind+'" data-mp-day="'+date+'" data-mp-stars="'+n+'" aria-pressed="'+(current===n)+'" aria-label="'+n+' stelle">'+(n<=current?'\u2605':'\u2606')+'</button>').join('')+'</div><small>'+(current?current+'/5 stelle salvate: le prossime proposte si adattano.':'Tocca una stella per aiutare le prossime proposte.')+'</small></div>'}
-function mealDetail(state,day,kind){const meal=getDish(state,chosen(state,day,kind)),done=eaten(state,day,kind),skip=skipped(state,day,kind),work=kind==='lunch'&&dow(day)>=1&&dow(day)<=5;return '<div class="mp-meal-detail"><div class="mp-mealname">'+H(meal.name)+'</div><div class="mp-tags"><span>'+(work?'Pronto dal supermercato':'Prepara '+meal.minutes+' min circa')+'</span>'+(kind==='lunch'&&!work?'<span>Da condividere, adattando le tolleranze</span>':'')+'</div><div class="mp-subtitle">Occorrente</div><p>'+H(meal.ingredients)+'</p><div class="mp-subtitle">Come fare</div><p>'+H(meal.how)+'</p><div class="mp-actions"><label class="mp-mealcheck"><input type="checkbox" data-life-meal="'+kind+'" data-life-day="'+day+'" '+(done?'checked':'')+'/><span>'+ (done?'Mangiato \u2713':'Segna come mangiato') +'</span></label><button type="button" class="btn secondary" data-mp-skip="'+kind+'" data-mp-day="'+day+'" '+(done?'disabled':'')+'>'+(skip?'Ripristina il pasto':'Non l\'ho mangiato')+'</button></div>'+(done?'': '<button class="mp-change" type="button" data-mp-new="'+kind+'" data-mp-day="'+day+'">\u21bb Proponi un altro piatto</button>')+stars(state,day,kind)+(window.SistemaMealEditor?.editMeal?.(state,day,kind)||'')+'</div>'}
+function mealDetail(state,day,kind){const meal=getDish(state,chosen(state,day,kind)),done=eaten(state,day,kind),skip=skipped(state,day,kind),work=kind==='lunch'&&(state.lifePlan?.settings?.work?.days?.includes(dow(day))??(dow(day)>=1&&dow(day)<=5));return '<div class="mp-meal-detail"><div class="mp-mealname">'+H(meal.name)+'</div><div class="mp-tags"><span>'+(work?'Pronto dal supermercato':'Prepara '+meal.minutes+' min circa')+'</span>'+(kind==='lunch'&&!work?'<span>Da condividere, adattando le tolleranze</span>':'')+'</div><div class="mp-subtitle">Occorrente</div><p>'+H(meal.ingredients)+'</p><div class="mp-subtitle">Come fare</div><p>'+H(meal.how)+'</p>'+(N?.macroHTML?.(meal.macros)||'')+(N?.reuseHTML?.(state,day,kind,meal)||'')+'<div class="mp-actions"><label class="mp-mealcheck"><input type="checkbox" data-life-meal="'+kind+'" data-life-day="'+day+'" '+(done?'checked':'')+'/><span>'+ (done?'Mangiato \u2713':'Segna come mangiato') +'</span></label><button type="button" class="btn secondary" data-mp-skip="'+kind+'" data-mp-day="'+day+'" '+(done?'disabled':'')+'>'+(skip?'Ripristina il pasto':'Non l\'ho mangiato')+'</button></div>'+(done?'': '<button class="mp-change" type="button" data-mp-new="'+kind+'" data-mp-day="'+day+'">\u21bb Proponi un altro piatto</button>')+stars(state,day,kind)+(window.SistemaMealEditor?.editMeal?.(state,day,kind)||'')+'</div>'}
 function snackDetail(state,day,kind){
  const plan=window.SistemaLifePlan?.getFood?.(state,day);
  const meal=plan?.[kind];
@@ -268,13 +280,13 @@ function snackDetail(state,day,kind){
  return '<div class="mp-meal-detail"><div class="mp-mealname">'+H(meal.name)+'</div>'+
  '<div class="mp-tags"><span>Ore '+H(meal.time||'')+'</span><span>Pronto in pochi minuti</span></div>'+
  '<div class="mp-subtitle">Cosa mangiare</div><p>'+H(meal.ingredients||meal.name)+'</p>'+
- '<div class="mp-subtitle">Come fare</div><p>'+H(meal.method||'Scegli la soluzione più semplice per te.')+'</p>'+
+ '<div class="mp-subtitle">Come fare</div><p>'+H(meal.method||'Scegli la soluzione più semplice per te.')+'</p>'+(N?.macroHTML?.(meal.macros)||'')+(N?.reuseHTML?.(state,day,kind,meal)||'')+
  '<label class="mp-mealcheck"><input type="checkbox" data-life-meal="'+kind+'" data-life-day="'+day+'" '+(done?'checked':'')+'/><span>'+(done?'Spuntino consumato ✓':'Segna come mangiato')+'</span></label>'+
  '<small class="mp-muted">Questa quest si completa solo quando registri lo spuntino. Non ci sono penalità se un giorno non riesci.</small>'+(window.SistemaMealEditor?.editMeal?.(state,day,kind)||'')+'</div>';
 }
 function shoppingPanel(state,day){if(window.SistemaMealEditor?.shoppingPanel)return window.SistemaMealEditor.shoppingPanel(state,day);const life=window.SistemaLifePlan;const get=life?.shoppingList;const items=get?get(state,day):[];const shop=data(state).shopping?.[day]||{};const shopKey=str=>{let h=2166136261;for(let i=0;i<str.length;i++)h=Math.imul(h^str.charCodeAt(i),16777619);return 'item_'+(h>>>0).toString(36)};return '<details class="mp-section" data-mp-shopping '+(shopOpen?'open':'')+'><summary><span>\ud83d\uded2 Spesa di oggi</span><small>'+items.length+' da controllare \u2304</small></summary><div class="mp-sectionbody"><p class="mp-muted">Solo ci\u00f2 che serve per i pasti non ancora mangiati o saltati. Il pranzo in ufficio scompare dopo le 18.</p>'+ (items.length?items.map(x=>'<label class="mp-shopitem"><input type="checkbox" data-life-shop="'+H(shopKey(x))+'" data-life-day="'+day+'" '+(shop[shopKey(x)]?'checked':'')+'/><span>'+H(x)+'</span></label>').join(''):'<p class="mp-empty">Niente da comprare oggi. \u2713</p>')+'<button type="button" class="btn secondary full" data-life-copyshop="'+day+'">Copia lista</button></div></details>'}
 function monthPanel(state){const plan=ensure(state),d=planDates(plan.anchor),s=stats(state);let weeks=[];for(let i=0;i<d.length;i+=7){const group=d.slice(i,i+7).map(day=>{const l=getDish(state,chosen(state,day,'lunch'));const dinner=getDish(state,chosen(state,day,'dinner'));const tag=k=>eaten(state,day,k)?'\u2713':skipped(state,day,k)?'\u2014':'';return '<div class="mp-day"><div class="mp-date">'+H(shortDate(day))+(day===today()?' <b>OGGI</b>':'')+'</div><div class="mp-lines"><span><i>'+tag('lunch')+'</i> Pranzo: '+H(l.name)+'</span><span><i>'+tag('dinner')+'</i> Cena: '+H(dinner.name)+'</span></div></div>'}).join('');weeks.push('<div class="mp-week"><h4>Settimana '+(Math.floor(i/7)+1)+'</h4>'+group+'</div>')}
- return '<details class="mp-section mp-month" id="month-calendar" data-mp-calendar '+(menuOpen?'open':'')+'><summary><span>\ud83d\udcc5 Menu dei prossimi 30 giorni</span><small>Apri il calendario \u2304</small></summary><div class="mp-sectionbody"><p class="mp-muted">Il menu viene corretto automaticamente quando registri un pasto o dai le stelle. I piatti saltati esplicitamente contano, quelli non registrati no. Le scelte che cambi a mano restano fissate.</p><div class="mp-mini-stats"><span>'+s.eatenCount+' mangiati</span><span>'+s.skippedCount+' saltati</span><span>'+s.rated+' valutati</span></div>'+(insights(state)?'<p><strong>Piatti graditi:</strong> '+H(insights(state))+'</p>':'<p>Dai le prime stelle per far apprendere al Sistema i tuoi gusti.</p>')+weeks.join('')+customForm()+'</div></details>';
+ return '<details class="mp-section mp-month" id="month-calendar" data-mp-calendar '+(menuOpen?'open':'')+'><summary><span>\ud83d\udcc5 Menu dei prossimi 30 giorni</span><small>Apri il calendario \u2304</small></summary><div class="mp-sectionbody"><p class="mp-muted">Rotazione di due settimane con pranzi acquistabili al banco, stime nutrizionali e ingredienti riutilizzati. Le valutazioni aiutano a scegliere alternative; i pasti modificati a mano restano fissati.</p><div class="mp-mini-stats"><span>'+s.eatenCount+' mangiati</span><span>'+s.skippedCount+' saltati</span><span>'+s.rated+' valutati</span></div>'+(insights(state)?'<p><strong>Piatti graditi:</strong> '+H(insights(state))+'</p>':'<p>Dai le prime stelle per far apprendere al Sistema i tuoi gusti.</p>')+weeks.join('')+customForm()+'</div></details>';
 }
 function customForm(){return '<details class="mp-custom"><summary>+ Aggiungi una tua ricetta alla libreria</summary><form id="mpCustomForm" class="mp-form mp-fields"><label>Per quale pasto?<select name="category"><option value="dinner">Cena</option><option value="deli">Pranzo pronto al supermercato</option><option value="shared">Pranzo del weekend insieme</option></select></label><label>Nome del piatto<input name="name" maxlength="90" placeholder="Es. Pasta con ricotta e zucchine" required/></label><label>Ingredienti<input name="ingredients" maxlength="240" placeholder="Ingredienti e dosi indicative" required/></label><label>Preparazione / acquisto<input name="how" maxlength="280" placeholder="Come lo prepari o lo acquisti" required/></label><label>Cosa comprare<input name="shop" maxlength="160" placeholder="Lista breve della spesa"/></label><button class="btn full" type="submit">Aggiungi al menu dei prossimi giorni</button></form></details>'}
 function workoutScheduled(state,day){
@@ -336,12 +348,12 @@ function renderQuests(state,day){
  return '<div class="mp-app"><section class="mp-questtop"><div><div class="mp-eyebrow">MISSIONI DI OGGI · '+H(shortDate(day))+'</div><h2>Le tue '+total+' quest</h2><p>Apri una scheda per vedere cosa fare e segnarla.</p></div><div class="mp-count">'+n+'<span>/'+total+'</span></div></section>'+
  headCard('sleep','Sonno','Registra le ore al risveglio',marks[0]?'Fatto':'Da fare',morningForm(state,day))+
  headCard('snack1','Spuntino del mattino · '+(food.snack1?.name||'Spuntino'),'Ore '+(food.snack1?.time||'11:30'),status('snack1'),snackDetail(state,day,'snack1'))+
- headCard('lunch','Pranzo · '+lunch.name,(dow(day)>=1&&dow(day)<=5?'Pronto al banco':'Pranzo condiviso')+' · '+(state.lifePlan.settings?.food?.lunch||'14:00'),status('lunch'),mealDetail(state,day,'lunch'))+
+ headCard('lunch','Pranzo · '+lunch.name,(food.workLunch?'Acquista al banco':'Pranzo a casa')+' · '+(state.lifePlan.settings?.food?.lunch||'14:00'),status('lunch'),mealDetail(state,day,'lunch'))+
  headCard('snack2','Spuntino del pomeriggio · '+(food.snack2?.name||'Spuntino'),'Ore '+(food.snack2?.time||'17:30'),status('snack2'),snackDetail(state,day,'snack2'))+
  workoutCard(state,day)+
  headCard('dinner','Cena · '+dinner.name,'Ore '+(state.lifePlan.settings?.food?.dinner||'20:30'),status('dinner'),mealDetail(state,day,'dinner'))+
  headCard('evening','Voti della giornata','Umore, energia e stress',marks[marks.length-1]?'Fatto':'Da fare',eveningForm(state,day))+
- historyPanel(state,day)+shoppingPanel(state,day)+monthPanel(state)+(window.SistemaMealEditor?.monthEditor?.(state)||'')+optionalPanel(state,day)+(window.SistemaMealEditor?.workoutEditor?.(state)||'')+'</div>';
+ (N?.dayPanel?.(state,day,food)||'')+historyPanel(state,day)+shoppingPanel(state,day)+monthPanel(state)+(window.SistemaMealEditor?.monthEditor?.(state)||'')+optionalPanel(state,day)+(window.SistemaMealEditor?.workoutEditor?.(state)||'')+'</div>';
 }
 function renderHome(state,level){
  const day=today(),food=window.SistemaLifePlan?.getFood?.(state,day)||{},s=stats(state);
@@ -457,9 +469,10 @@ function renderCorrectionImport(){
 function applyFeedback(state,date,kind){const m=ensure(state);build(state,m.anchor,true);unsaved=true;}
 function markSkip(state,date,kind){const p=data(state),m=ensure(state);p.skippedMeals[date]=p.skippedMeals[date]||{};if(p.skippedMeals[date][kind])delete p.skippedMeals[date][kind];else p.skippedMeals[date][kind]=chosen(state,date,kind);if(!Object.keys(p.skippedMeals[date]).length)delete p.skippedMeals[date];applyFeedback(state,date,kind)}
 function rate(state,date,kind,stars){if(!eaten(state,date,kind))return false;const p=data(state);p.mealReviews[date]=p.mealReviews[date]||{};p.mealReviews[date][kind]={id:chosen(state,date,kind),stars,updatedAt:new Date().toISOString()};applyFeedback(state,date,kind);return true;}
-function propose(state,date,kind){if(eaten(state,date,kind))return null;const m=ensure(state),obs=observed(state),old=chosen(state,date,kind);const alternatives=pool(state,date,kind).filter(x=>x.id!==old);const untried=alternatives.filter(x=>!obs.stats[x.id]?.count&&!obs.stats[x.id]?.skipped);const poolUse=untried.length?untried:alternatives;const seen=Object.values(m.entries||{}).flatMap(x=>[x.lunch,x.dinner]);const choices=poolUse.map(d=>({dish:d,score:(hash(d.id+date+Math.random())%1000)/1000-(seen.includes(d.id)?2:0)+((obs.tagStats[d.tags?.[0]]?.sum||0)*0.05)})).sort((a,b)=>b.score-a.score);const pick=choices[0]?.dish;if(!pick)return null;m.entries[date][kind]=pick.id;m.locked[date]=m.locked[date]||{};m.locked[date][kind]=true;applyFeedback(state,date,kind);return pick;}
+function propose(state,date,kind){if(eaten(state,date,kind))return null;const m=ensure(state),obs=observed(state),old=chosen(state,date,kind);const alternatives=pool(state,date,kind).filter(x=>x.id!==old);const untried=alternatives.filter(x=>!obs.stats[x.id]?.count&&!obs.stats[x.id]?.skipped);const poolUse=untried.length?untried:alternatives;const seen=Object.values(m.entries||{}).flatMap(x=>[x.lunch,x.dinner]);const choices=poolUse.map(d=>({dish:d,score:(hash(d.id+date+Math.random())%1000)/1000-(seen.includes(d.id)?2:0)+((obs.tagStats[d.tags?.[0]]?.sum||0)*0.05)})).sort((a,b)=>b.score-a.score);const pick=N&&kind==='dinner'&&pool(state,date,kind).length===1?choices[0]?.dish:N?.alternative?.(state,date,kind,old,obs)||choices[0]?.dish;if(!pick)return null;m.entries[date][kind]=pick.id;m.locked[date]=m.locked[date]||{};m.locked[date][kind]=true;applyFeedback(state,date,kind);return pick;}
 function attach(state,persist,renderApp,toast){if(!enabled(state))return;ensure(state);if(unsaved){unsaved=false;persist();}
  const doc=document;
+ N?.attach?.(state,persist,renderApp,toast);
  doc.querySelector('[data-mp-history]')?.addEventListener('toggle',e=>{historyOpen=e.currentTarget.open});
  doc.querySelector('[data-mp-history-date]')?.addEventListener('change',e=>{historyDay=e.currentTarget.value;historyOpen=true;renderApp()});
  doc.querySelector('[data-mp-import-correction]')?.addEventListener('click',()=>doc.getElementById('mpCorrectionFile')?.click());
