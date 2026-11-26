@@ -82,6 +82,7 @@ function removeShopping(state,day,item){
  const o=shoppingOptions(state,day);
  if(o.added.includes(item))o.added=o.added.filter(x=>x!==item);
  else if(!o.hidden.includes(item))o.hidden.push(item);
+ // Removing a row does not discard ingredients actually bought. Adjust the real pantry separately.
  if(lp(state).shopping[day])delete lp(state).shopping[day][hash(item)];
 }
 function addShopping(state,day,item){
@@ -101,11 +102,11 @@ function shoppingPanel(state,day){
  (openRow===day+':'+item?'<form class="me-rename" data-me-rename-form data-day="'+day+'" data-old="'+esc(item)+'"><input name="name" maxlength="140" required value="'+esc(item)+'"><button class="btn secondary" type="submit">Salva</button></form>':'')+
  '</div>').join('');
  return '<details class="mp-section me-shopping" data-mp-shopping '+(openShop?'open':'')+'><summary><span>🛒 Lista della spesa</span><small>'+items.length+' prodotti · modificabile ⌄</small></summary>'+
- '<div class="mp-sectionbody"><p class="mp-muted">Modifica quantità, aggiungi prodotti o rimuovili. Gli acquisti per pasti già mangiati scompaiono dalla lista.</p>'+
+ '<div class="mp-sectionbody"><p class="mp-muted">Spunta i prodotti acquistati: le quantità previste entrano in dispensa e vengono sottratte quando registri i pasti. Correggi la scorta se il peso reale o le porzioni sono diversi. Le righe già acquistate restano visibili oggi per poter annullare la spunta.</p>'+
  (rows||'<p class="mp-muted">Nessun acquisto necessario oggi.</p>')+
  '<form data-me-add data-day="'+day+'" class="me-add"><input name="name" maxlength="140" required placeholder="Nuovo prodotto / quantità"><button class="btn" type="submit">Aggiungi</button></form>'+
  '<div class="me-restore"><button class="btn secondary" type="button" data-life-copyshop="'+day+'">Copia</button>'+
- '<button class="btn secondary" type="button" data-me-reset data-day="'+day+'">Ripristina automatica</button></div></div></details>';
+ '<button class="btn secondary" type="button" data-me-reset data-day="'+day+'">Ripristina automatica</button></div>'+(window.SistemaNutrition?.pantryPanel?.(state,day)||'')+'</div></details>';
 }
 
 function workoutEditor(state){
