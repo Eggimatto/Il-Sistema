@@ -55,7 +55,10 @@ const L={
  parm:deli('l_parm','Pane, parmigiano stagionato e banana',[['bread',150],['parm',60],['banana',120]],['pane','lattosiofree']),
  ham:deli('l_ham','Focaccia con prosciutto cotto e frutta',[['focaccia',150],['ham',80],['orange',150]],['pane','carne','salumi']),
  pizza:deli('l_pizza','Pizza rossa, mozzarella delattosata e frutta',[['pizza',180],['mozzarella',100],['orange',150]],['pizza','lattosiofree']),
- foca:deli('l_foca','Focaccia con mozzarella delattosata e frutta',[['focaccia',150],['mozzarella',100],['banana',120]],['pane','lattosiofree'])
+ foca:deli('l_foca','Focaccia con mozzarella delattosata e frutta',[['focaccia',150],['mozzarella',100],['banana',120]],['pane','lattosiofree']),
+ breadParm:deli('l_bread_parm','Panino con parmigiano stagionato e frutta',[['bread',150],['parm',60],['orange',150]],['pane','lattosiofree']),
+ pizzaChicken:deli('l_pizza_chicken','Pizza rossa, pollo arrosto e frutta',[['pizza',180],['roast',100],['orange',150]],['pizza','pollo']),
+ focaParm:deli('l_foca_parm','Focaccia con parmigiano stagionato e banana',[['focaccia',150],['parm',55],['banana',120]],['pane','lattosiofree'])
 };
 const D=(id,name,parts,how,group,tags)=>recipe(id,'dinner',name,parts,how,group,20,tags);
 const dinner={
@@ -93,14 +96,16 @@ const sn={
  orange:snack('sn_orange','Frutta e mandorle',[['orange',150],['almond',30]]),
  yogurtbread:snack('sn_yogurtbread','Yogurt delattosato e pane con crema di arachidi',[['yogurt',125],['bread',70],['peanut',25]])
 };
-const lunches=[L.chicken,L.cheese,L.ham,L.pizza,L.chicken2,shared.pasta,shared.lentil,L.chicken2,L.parm,L.ham,L.foca,L.chicken,shared.cod,shared.chicken];
+// Keep old recipe IDs readable for historical records, but never offer them again at the deli.
+const deliReplacement=Object.freeze({[L.cheese]:L.breadParm,[L.pizza]:L.pizzaChicken,[L.foca]:L.focaParm});
+const lunches=[L.chicken,L.breadParm,L.ham,L.pizzaChicken,L.chicken2,shared.pasta,shared.lentil,L.chicken2,L.parm,L.ham,L.focaParm,L.chicken,shared.cod,shared.chicken];
 const dinners=[dinner.potatoegg,dinner.potatofish,dinner.ricechicken,dinner.pastatuna,null,dinner.salmonrice,dinner.eggspin,dinner.burg,dinner.potatocod,dinner.lentilrice,dinner.zucchinipasta,null,dinner.turkeygreen,dinner.chickgreen];
 const am=[sn.banana,sn.orange,sn.banana,sn.orange,sn.banana,sn.orange,sn.banana];
 const pm=[sn.yogurt,sn.yogurtbread,sn.milk,sn.milk,sn.bread,sn.yogurt,sn.yogurtbread];
 function work(state,d){return state.lifePlan?.settings?.work?.days?.includes(dow(d))??(dow(d)>=1&&dow(d)<=5)}
 function sharedLunch(state,d){return !work(state,d)&&!!state.lifePlan?.settings?.food?.sharedLunchDays?.includes(dow(d))}
 function servings(state,d,k){return k==='lunch'&&sharedLunch(state,d)?2:1}
-function pool(state,d,k){const category=k==='lunch'?(work(state,d)?'deli':'shared'):'dinner';return recipes.filter(x=>x.category===category)}
+function pool(state,d,k){const category=k==='lunch'?(work(state,d)?'deli':'shared'):'dinner';return recipes.filter(x=>x.category===category&&!(category==='deli'&&Object.hasOwn(deliReplacement,x.id)))}
 function preferred(state,d,k,obs){
  const i=index(d),pizzaDay=state.lifePlan?.settings?.food?.pizzaDay;
  if(k==='dinner'&&dow(d)===(Number.isInteger(pizzaDay)?pizzaDay:5))return 'friday_pizza';
@@ -277,5 +282,5 @@ function alternative(s,d,k,old,obs){
 }
 const css='.np-macros{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:4px 0}.np-macros span{display:grid;gap:3px;border:1px solid #738cc34a;background:#162946;padding:9px;border-radius:9px;color:#b9d5ed;font-size:11px}.np-macros b{font-size:16px;color:#e8f5ff}.np-pantry,.np-reuse{display:grid;gap:8px;border:1px solid #7ba8c84d;border-radius:12px;padding:12px;background:#132b3d}.np-pantry h3{margin:0;font-size:15px}.np-stockrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #7387a43b}.np-stockrow span{min-width:0;display:grid;gap:2px}.np-stockrow small,.np-reuse small{color:#b0c6da;font-size:11px}.np-stockrow strong{white-space:nowrap;color:#a8e6d6}.np-reuse p{margin:0;font-size:12px}.np-day .mp-sectionbody{border-top:0}';
 if(typeof document!=='undefined'){const st=document.createElement('style');st.textContent=css;document.head.appendChild(st)}
-window.SistemaNutrition={recipes,byId,F,preferred,pool,snackFor,servings,macro,macroHTML,dayPanel,reuseHTML,shoppingItems,shoppingRows,togglePurchase,recordMeal,stock,setStock,pantryPanel,attach,alternative,rebalance,index};
+window.SistemaNutrition={recipes,byId,F,preferred,pool,snackFor,servings,macro,macroHTML,dayPanel,reuseHTML,shoppingItems,shoppingRows,togglePurchase,recordMeal,stock,setStock,pantryPanel,attach,alternative,rebalance,index,deliReplacement};
 })();
