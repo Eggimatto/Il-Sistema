@@ -58,6 +58,7 @@ const L={
  foca:deli('l_foca','Focaccia con mozzarella delattosata e frutta',[['focaccia',150],['mozzarella',100],['banana',120]],['pane','lattosiofree']),
  breadParm:deli('l_bread_parm','Panino con parmigiano stagionato e frutta',[['bread',150],['parm',60],['orange',150]],['pane','lattosiofree']),
  pizzaChicken:deli('l_pizza_chicken','Pizza rossa, pollo arrosto e frutta',[['pizza',180],['roast',100],['orange',150]],['pizza','pollo']),
+ pizzaHam:recipe('l_pizza_ham','deli','Pizza rossa farcita con prosciutto cotto',[['pizza',180],['ham',60],['orange',150]],'Prendi un trancio di pizza rossa e 60 g di prosciutto cotto al banco, da usare come farcitura. Se preferisci, mangia la frutta piu tardi. Quantita indicative, adattabili all appetito.','',0,['pizza','salumi']),
  focaParm:deli('l_foca_parm','Focaccia con parmigiano stagionato e banana',[['focaccia',150],['parm',55],['banana',120]],['pane','lattosiofree'])
 };
 const D=(id,name,parts,how,group,tags)=>recipe(id,'dinner',name,parts,how,group,20,tags);
@@ -97,8 +98,8 @@ const sn={
  yogurtbread:snack('sn_yogurtbread','Yogurt delattosato e pane con crema di arachidi',[['yogurt',125],['bread',70],['peanut',25]])
 };
 // Keep old recipe IDs readable for historical records, but never offer them again at the deli.
-const deliReplacement=Object.freeze({[L.cheese]:L.breadParm,[L.pizza]:L.pizzaChicken,[L.foca]:L.focaParm});
-const lunches=[L.chicken,L.breadParm,L.ham,L.pizzaChicken,L.chicken2,shared.pasta,shared.lentil,L.chicken2,L.parm,L.ham,L.focaParm,L.chicken,shared.cod,shared.chicken];
+const deliReplacement=Object.freeze({[L.cheese]:L.breadParm,[L.pizza]:L.pizzaHam,[L.pizzaChicken]:L.pizzaHam,[L.foca]:L.focaParm});
+const lunches=[L.chicken,L.breadParm,L.ham,L.pizzaHam,L.chicken2,shared.pasta,shared.lentil,L.chicken2,L.parm,L.ham,L.focaParm,L.chicken,shared.cod,shared.chicken];
 const dinners=[dinner.potatoegg,dinner.potatofish,dinner.ricechicken,dinner.pastatuna,null,dinner.salmonrice,dinner.eggspin,dinner.burg,dinner.potatocod,dinner.lentilrice,dinner.zucchinipasta,null,dinner.turkeygreen,dinner.chickgreen];
 const am=[sn.banana,sn.orange,sn.banana,sn.orange,sn.banana,sn.orange,sn.banana];
 const pm=[sn.yogurt,sn.yogurtbread,sn.milk,sn.milk,sn.bread,sn.yogurt,sn.yogurtbread];
