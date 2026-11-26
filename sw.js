@@ -1,6 +1,6 @@
 // Offline-first shell. Does not cache Supabase or personal data.
-const CACHE='il-sistema-risveglio-v6-art-20261126';
-const OWN=['./','./index.html','./manifest.json','./manifest.webmanifest','./icon.svg','./cloud-config.js','./cloud.js','./food-plan.js','./push.js','./month-plan.js','./meal-editor.js','./analysis-bridge.js','./ui-v54.css'];
+const CACHE='il-sistema-risveglio-v6-1-nutrition-20261126';
+const OWN=['./','./index.html','./manifest.json','./manifest.webmanifest','./icon.svg','./cloud-config.js','./cloud.js','./food-plan.js','./push.js','./nutrition-plan.js','./month-plan.js','./meal-editor.js','./analysis-bridge.js','./ui-v54.css'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(OWN)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('il-sistema-risveglio-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{const req=e.request,url=new URL(req.url);if(req.method!=='GET'||url.origin!==self.location.origin)return;const publicPaths=OWN.map(x=>new URL(x,self.registration.scope).pathname);if(!publicPaths.includes(url.pathname)&&req.mode!=='navigate')return;e.respondWith((async()=>{const cache=await caches.open(CACHE);try{const result=await fetch(req);if(result.ok)cache.put(req,result.clone());return result}catch{const hit=await cache.match(req,{ignoreSearch:true});if(hit)return hit;if(req.mode==='navigate')return cache.match('./index.html');return Response.error()}})())});
